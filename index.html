@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plans électriques — DF artisan</title>
+<meta name="description" content="Plans d'implantation électrique en 2D : murs, portes, fenêtres, appareillage NF C 15-100, liaisons, circuits. Gratuit, sans installation, hors connexion.">
+<meta name="theme-color" content="#2d4ea2">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="256x256" href="icone.png">
+<link rel="apple-touch-icon" href="icone-192.png">
+<link rel="stylesheet" href="style.css?v=0.44.1">
+<style>
+  /* version autonome : seulement les plans */
+  .barre-gauche #nav .nav-ligne:not(.autonome), #mise-a-jour, #profil, #bouton-reseau, #quitter, #bouton-electricien { display: none !important; }
+  .nav-fichiers { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+  .nav-fichiers button { text-align: left; background: none; border: 0; color: inherit; padding: 6px 10px; border-radius: 6px; cursor: pointer; font: inherit; }
+  .nav-fichiers button:hover { background: rgba(255,255,255,.12); }
+  .apropos-autonome { font-size: 11.5px; opacity: .75; padding: 6px 10px; line-height: 1.35; }
+  body.gauche-repliee .nav-fichiers, body.gauche-repliee .apropos-autonome { display: none; }
+</style>
+</head>
+<body>
+<aside class="barre-gauche">
+  <div class="marque"><button id="bouton-menu" class="bouton-menu" title="Afficher le menu">☰</button><span class="nom-logiciel">Plans électriques</span><button id="bouton-electricien" class="bouton-electricien"></button></div>
+  <nav id="nav">
+    <div class="nav-ligne autonome"><button data-section="plans" class="actif">Mes plans</button><button class="nav-plus" id="nouveau-plan" title="Nouveau plan">+</button></div>
+  </nav>
+  <div class="nav-fichiers">
+    <button id="exporter" title="Tous vos plans dans un fichier (sauvegarde, ou pour les ouvrir sur un autre appareil)">💾 Enregistrer mes plans (fichier)</button>
+    <button id="importer" title="Ouvrir un fichier de plans (.plans.json) : les plans sont ajoutés à ceux déjà là">📂 Ouvrir un fichier de plans</button>
+  </div>
+  <div id="mise-a-jour"></div>
+  <div id="etat-enregistrement" class="etat"></div>
+  <div id="profil"></div>
+  <div class="apropos-autonome">Vos plans restent dans ce navigateur, sur cet appareil : enregistrez-les de temps en temps en fichier.<br>Module de plans issu de <b>DF artisan</b>, logiciel de devis et factures spécialisé dans le bâtiment, <b>en cours de développement</b> : il peut comporter des erreurs.<a id="lien-retours" href="#" target="_blank" rel="noopener" style="color:inherit;display:block;margin:4px 0">Signaler un bug, proposer une idée (GitHub)</a><div style="margin-top:4px">Gratuit, usage commercial du logiciel interdit (voir LICENCE.txt). Version 0.44.1.</div></div>
+  <button id="bouton-plein-ecran" class="nav-reseau" title="Plein écran (F11)"><span class="reseau-icone">⛶</span><span class="reseau-texte">Plein écran</span></button>
+  <button id="bouton-reseau" class="nav-reseau cache"><span class="reseau-icone"></span><span class="reseau-texte"></span></button>
+  <div class="pied-gauche"><button id="replier-gauche" class="replier-gauche" title="Masquer cette colonne pour gagner de la place (le menu reste accessible par ☰)">« Réduire</button><button id="quitter" class="replier-gauche"></button></div>
+</aside>
+<main id="contenu"></main>
+<div id="modale" class="modale cache"><div class="modale-boite" id="modale-boite"></div></div>
+<div id="toast" class="toast cache"></div>
+<script src="sans-serveur.js"></script>
+<script src="riche.js?v=0.44.1"></script>
+<script src="js/base.js?v=0.44.1"></script>
+<script src="js/listes.js?v=0.44.1"></script>
+<script src="js/devis.js?v=0.44.1"></script>
+<script src="js/etude_clavier.js?v=0.44.1"></script>
+<script src="js/plan.js?v=0.44.1"></script>
+<script src="js/plan_photo.js?v=0.44.1"></script>
+<script src="autonome.js?v=0.44.1"></script>
+</body>
+</html>
