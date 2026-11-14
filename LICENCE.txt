@@ -6,7 +6,7 @@ Copyright (c) 2026 Jérôme Guillon
 DF artisan (« Devis Facture artisan », anciennement BatiDevis) est un logiciel de devis et de factures
 pour les artisans du bâtiment (ci-après « le Logiciel »).
 Son auteur, Jérôme Guillon (ci-après « l'Auteur »), le met à disposition gratuitement aux conditions
-ci-dessous. Utiliser, copier, modifier ou diffuser le Logiciel vaut acceptation de cette licence.
+ci-dessous. Utiliser, copier, modifier ou diffuser le Logiciel vaut acceptation de cette licence. 
 
 
 ARTICLE 1 - CE QUI EST PERMIS, GRATUITEMENT
