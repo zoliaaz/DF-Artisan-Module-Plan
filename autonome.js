@@ -271,6 +271,57 @@ function importerPlans() {
   f.click();
 }
 
+/* ---------- enregistrer / restaurer les options (⚙ Options des plans, symboles importés, ensembles) ---------- */
+async function exporterOptions() {
+  const parametres = (await STOCKAGE.lireDivers("parametres")) || {};
+  // (et les réglages d'affichage gardés par le navigateur : mode tablette, droitier / gaucher, colonnes, panneau…)
+  const affichage = {};
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (/^dfa_plan_/.test(k) && k !== "dfa_plan_note") affichage[k] = localStorage.getItem(k);
+    }
+  } catch (e) {
+    /* (stockage local indisponible) */
+  }
+  const contenu = JSON.stringify(
+    { format: "plans-electriques-options", version: 1, enregistre_le: maintenantISO(), parametres, affichage },
+    null,
+    1
+  );
+  const a = h("a", {
+    href: URL.createObjectURL(new Blob([contenu], { type: "application/json" })),
+    download: "mes-options-plans-" + maintenantISO().slice(0, 10) + ".options.json",
+  });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  toast("Options enregistrées dans le fichier.");
+}
+function importerOptions() {
+  const f = h("input", { type: "file", accept: ".json,application/json" });
+  f.addEventListener("change", async () => {
+    try {
+      const x = JSON.parse(await f.files[0].text());
+      if (!["plans-electriques-options", "plans-electriques"].includes(x.format) || !x.parametres || typeof x.parametres !== "object")
+        throw new Error("Ce fichier ne contient pas d'options de plans.");
+      if (!(await demanderOui("Remplacer vos options actuelles par celles du fichier ? Vos plans ne changent pas."))) return;
+      await STOCKAGE.ecrireDivers("parametres", x.parametres);
+      try {
+        for (const [k, v] of Object.entries(x.affichage || {})) if (/^dfa_plan_/.test(k)) localStorage.setItem(k, v);
+      } catch (e) {
+        /* (stockage local indisponible) */
+      }
+      await chargerParams();
+      toast("Options restaurées.");
+      aller("plans");
+    } catch (e) {
+      erreur(e);
+    }
+  });
+  f.click();
+}
+
 /* ---------- démarrage ---------- */
 const SECTIONS = { plans: (z, a) => sectionPlans(z, a) };
 document.querySelectorAll("#nav button[data-section]").forEach(b =>
@@ -289,6 +340,8 @@ document.getElementById("nouveau-plan").addEventListener("click", async () => {
 });
 document.getElementById("exporter").addEventListener("click", () => exporterPlans().catch(erreur));
 document.getElementById("importer").addEventListener("click", importerPlans);
+document.getElementById("exporter-options").addEventListener("click", () => exporterOptions().catch(erreur));
+document.getElementById("importer-options").addEventListener("click", importerOptions);
 // retours (bugs, idées) : la page « issues » du dépôt GitHub qui publie le module ; ailleurs, le lien est caché
 (() => {
   const l = document.getElementById("lien-retours"),

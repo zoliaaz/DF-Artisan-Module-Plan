@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="256x256" href="icone.png">
 <link rel="apple-touch-icon" href="icone-192.png">
-<link rel="stylesheet" href="style.css?v=0.44.1">
+<link rel="stylesheet" href="style.css?v=0.52.1">
 <style>
   /* version autonome : seulement les plans */
   .barre-gauche #nav .nav-ligne:not(.autonome), #mise-a-jour, #profil, #bouton-reseau, #quitter, #bouton-electricien { display: none !important; }
@@ -18,6 +18,9 @@
   .nav-fichiers button:hover { background: rgba(255,255,255,.12); }
   .apropos-autonome { font-size: 11.5px; opacity: .75; padding: 6px 10px; line-height: 1.35; }
   body.gauche-repliee .nav-fichiers, body.gauche-repliee .apropos-autonome { display: none; }
+  /* colonne bleue réduite : enregistrer et ouvrir passent dans la barre du plan, à côté du menu */
+  .fichiers-autonome { display: none !important; }
+  body.gauche-repliee .fichiers-autonome { display: inline-flex !important; }
 </style>
 </head>
 <body>
@@ -29,11 +32,13 @@
   <div class="nav-fichiers">
     <button id="exporter" title="Tous vos plans dans un fichier (sauvegarde, ou pour les ouvrir sur un autre appareil)">💾 Enregistrer mes plans (fichier)</button>
     <button id="importer" title="Ouvrir un fichier de plans (.plans.json) : les plans sont ajoutés à ceux déjà là">📂 Ouvrir un fichier de plans</button>
+    <button id="exporter-options" title="Vos options (⚙ Options des plans, symboles importés, ensembles) dans un fichier, pour les garder ou les reprendre sur un autre appareil">⚙ Enregistrer mes options (fichier)</button>
+    <button id="importer-options" title="Reprendre vos options depuis un fichier d'options (ou un fichier de plans)">↺ Restaurer mes options</button>
   </div>
   <div id="mise-a-jour"></div>
   <div id="etat-enregistrement" class="etat"></div>
   <div id="profil"></div>
-  <div class="apropos-autonome">Vos plans restent dans ce navigateur, sur cet appareil : enregistrez-les de temps en temps en fichier.<br>Module de plans issu de <b>DF artisan</b>, logiciel de devis et factures spécialisé dans le bâtiment, <b>en cours de développement</b> : il peut comporter des erreurs.<a id="lien-retours" href="#" target="_blank" rel="noopener" style="color:inherit;display:block;margin:4px 0">Signaler un bug, proposer une idée (GitHub)</a><div style="margin-top:4px">Gratuit, usage commercial du logiciel interdit (voir LICENCE.txt). Version 0.44.1.</div></div>
+  <div class="apropos-autonome">Vos plans restent dans ce navigateur, sur cet appareil : enregistrez-les de temps en temps en fichier.<br>Module de plans issu de <b>DF artisan</b>, logiciel de devis et factures spécialisé dans le bâtiment, <b>en cours de développement</b> : il peut comporter des erreurs.<a id="lien-retours" href="#" target="_blank" rel="noopener" style="color:inherit;display:block;margin:4px 0">Signaler un bug, proposer une idée (GitHub)</a><div style="margin-top:4px">Gratuit, utilisable pour votre activité professionnelle ; le module lui-même ne peut pas être vendu (voir LICENCE.txt). Version 0.52.1.</div></div>
   <button id="bouton-plein-ecran" class="nav-reseau" title="Plein écran (F11)"><span class="reseau-icone">⛶</span><span class="reseau-texte">Plein écran</span></button>
   <button id="bouton-reseau" class="nav-reseau cache"><span class="reseau-icone"></span><span class="reseau-texte"></span></button>
   <div class="pied-gauche"><button id="replier-gauche" class="replier-gauche" title="Masquer cette colonne pour gagner de la place (le menu reste accessible par ☰)">« Réduire</button><button id="quitter" class="replier-gauche"></button></div>
@@ -42,13 +47,13 @@
 <div id="modale" class="modale cache"><div class="modale-boite" id="modale-boite"></div></div>
 <div id="toast" class="toast cache"></div>
 <script src="sans-serveur.js"></script>
-<script src="riche.js?v=0.44.1"></script>
-<script src="js/base.js?v=0.44.1"></script>
-<script src="js/listes.js?v=0.44.1"></script>
-<script src="js/devis.js?v=0.44.1"></script>
-<script src="js/etude_clavier.js?v=0.44.1"></script>
-<script src="js/plan.js?v=0.44.1"></script>
-<script src="js/plan_photo.js?v=0.44.1"></script>
-<script src="autonome.js?v=0.44.1"></script>
+<script src="riche.js?v=0.52.1"></script>
+<script src="js/base.js?v=0.52.1"></script>
+<script src="js/listes.js?v=0.52.1"></script>
+<script src="js/devis.js?v=0.52.1"></script>
+<script src="js/etude_clavier.js?v=0.52.1"></script>
+<script src="js/plan.js?v=0.52.1"></script>
+<script src="js/plan_photo.js?v=0.52.1"></script>
+<script src="autonome.js?v=0.52.1"></script>
 </body>
 </html>

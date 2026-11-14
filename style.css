@@ -1282,3 +1282,37 @@ tbody tr.a-deplacer > td { background: #fef3c7 !important; opacity: .8; }
 .et-pastille.choisi { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #2563eb; }
 .sch-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
 .sch-case { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px; border: 1px solid var(--bord); border-radius: 8px; background: #fff; color: #111; font-size: 12px; text-align: center; }
+.et-onglets { display: flex; gap: 6px; margin: 2px 0 8px; }
+.et-schema-cadre { background: #fff; border: 1px solid var(--bord); border-radius: 8px; padding: 8px; overflow: auto; }
+.et-schema-svg { display: block; width: 100%; min-width: 500px; height: auto; }
+.et-nomenclature td, .et-nomenclature th { font-size: 12.5px; }
+.et-saisie td { padding: 1px 2px; }
+.et-saisie input, .et-saisie select { font-size: 12.5px; padding: 3px 4px; box-sizing: border-box; }
+/* impression du tableau (module maison) */
+.et-impr-ligne{display:flex;gap:8px;align-items:baseline;cursor:pointer}
+.et-impr-opts{display:flex;flex-wrap:wrap;gap:6px 16px;margin:-4px 0 4px 26px;align-items:center}
+.et-impr-sous{display:flex;gap:4px;align-items:center;cursor:pointer}
+/* module maison : panneau entièrement visible (défile s'il est plus haut que l'écran), barre du haut sur une ligne */
+.et-panneau:not(.pres) { box-sizing: border-box; }
+@media (pointer: coarse) { .et-panneau:not(.pres) { overflow-y: auto; } }
+/* panneau resserré : il tient entier à l'écran sur un PC */
+.et-panneau { width: 360px; gap: 5px; padding: 8px 10px; }
+.et-panneau .champ { gap: 2px; margin: 0; }
+.et-panneau .champ > span:first-child { font-size: 12.5px; }
+.et-panneau .pile { gap: 5px; }
+.et-panneau textarea { padding: 4px 6px; }
+.et-panneau input[type="text"], .et-panneau input[type="number"], .et-panneau select { padding-top: 4px; padding-bottom: 4px; min-height: 0; }
+.et-panneau .et-pictos { grid-template-columns: repeat(auto-fill, minmax(26px, 1fr)); gap: 3px; }
+.et-panneau .et-picto { height: 27px; }
+.et-panneau .et-picto svg { width: 18px; height: 18px; }
+.et-barre-compacte { gap: 8px 14px; align-items: center; margin: 2px 0 6px; }
+.et-barre-compacte .champ { flex-direction: row; align-items: center; gap: 6px; }
+.et-barre-compacte .champ > span { white-space: nowrap; }
+.et-barre-compacte input[type="number"] { width: 58px !important; }
+.et-barre-compacte select { max-width: 200px; }
+.et-coches { display: flex; flex-direction: column; gap: 2px; max-height: 150px; overflow-y: auto; border: 1px solid var(--bord); border-radius: 6px; padding: 4px 6px; }
+.et-coches label { display: flex; gap: 4px; align-items: center; cursor: pointer; font-size: 13px; }
+.et-nomenclature-cadre { overflow-x: auto; max-width: 100%; }
+.et-impr-opts > label { display: inline-flex; align-items: center; gap: 6px; } .et-impr-opts select { width: auto; }
+.et-ligne-haut { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin: 2px 0 8px; }
+.et-ligne-haut .et-onglets, .et-ligne-haut .et-barre { margin: 0; }

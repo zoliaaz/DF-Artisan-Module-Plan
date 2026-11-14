@@ -740,6 +740,8 @@ const optPlans = () =>
     {
       // (version autonome publiée en ligne : alertes coupées tant qu'on ne les active pas dans ⚙ Options > Circuits)
       alertes_nfc: !window.PLANS_AUTONOMES && !((PARAMS && PARAMS.general) || {}).plan_sans_verif_nfc,
+      // (volumes V1 / V2 de la salle d'eau dessinés ; version autonome en ligne : cachés tant qu'on ne les coche pas)
+      volumes_sdb: !window.PLANS_AUTONOMES,
       taille_symbole: 34,
       taille_texte: 100,
       largeur_porte: 83,
@@ -2511,6 +2513,33 @@ async function ouvrirPlan(zone, id, arg) {
       },
       "Registre des gaines et moulures"
     ),
+    ...(PLANS_AUTONOMES
+      ? [
+          h(
+            "button",
+            { class: "btn", title: "Imprimer le plan, ou l'enregistrer en PDF (A4, A3, échelle)", onclick: () => dialogueImpression() },
+            "🖨 PDF / Imprimer"
+          ),
+          h(
+            "button",
+            {
+              class: "btn fichiers-autonome",
+              title: "Enregistrer mes plans dans un fichier",
+              onclick: () => typeof window.exporterPlans === "function" && window.exporterPlans().catch(erreur),
+            },
+            "💾"
+          ),
+          h(
+            "button",
+            {
+              class: "btn fichiers-autonome",
+              title: "Ouvrir un fichier de plans",
+              onclick: () => typeof window.importerPlans === "function" && window.importerPlans(),
+            },
+            "📂"
+          ),
+        ]
+      : []),
     h(
       "button",
       {
@@ -2611,6 +2640,7 @@ async function ouvrirPlan(zone, id, arg) {
     const coulGo = h("input", { type: "color", value: o.couleur_goulotte || "#7c3aed", style: "width:60px;height:30px;padding:0" });
     const listeGo = h("input", { type: "text", value: o.goulottes || GOULOTTES_DEFAUT, placeholder: GOULOTTES_DEFAUT });
     const alertes = h("input", { type: "checkbox", checked: !!o.alertes_nfc });
+    const volumes = h("input", { type: "checkbox", checked: !!o.volumes_sdb });
     const tTexte = h(
       "select",
       {},
@@ -2792,6 +2822,7 @@ async function ouvrirPlan(zone, id, arg) {
           { class: "sous", style: "margin:-4px 0 0 24px" },
           "Une aide pour électricien averti : les alertes peuvent comporter des erreurs ou des oublis (module en développement) et ne remplacent ni la norme ni la vérification sur place."
         ),
+        h("label", { class: "case" }, volumes, "Dessiner les volumes de la salle d'eau (V1, V2 autour de la douche et de la baignoire)"),
         h(
           "div",
           {},
@@ -3029,6 +3060,7 @@ async function ouvrirPlan(zone, id, arg) {
                 const plans = {
                   ...(PARAMS.plans || {}),
                   alertes_nfc: alertes.checked,
+                  volumes_sdb: volumes.checked,
                   taille_symbole: Math.max(15, nombre(taille.value) || 34),
                   taille_texte: Number(tTexte.value) || 100,
                   largeur_porte: Math.max(40, nombre(lp.value) || 83),
@@ -6679,7 +6711,7 @@ async function ouvrirPlan(zone, id, arg) {
       svg.append(gg);
     }
     // volumes de la salle d'eau (pointillés fins : volume 1 = la douche ou la baignoire, volume 2 = 60 cm autour)
-    for (const zv of volumesSdb()) {
+    for (const zv of optPlans().volumes_sdb ? volumesSdb() : []) {
       const gv = svgEl("g", {
         transform: `translate(${zv.o.x} ${zv.o.y}) rotate(${zv.o.rot || 0})`,
         fill: "none",
@@ -10735,6 +10767,7 @@ async function ouvrirPlan(zone, id, arg) {
         typeA: !!(picto && TYPE_A_TQ.test(picto[1])),
         irve: !!(picto && picto[1] === IRVE_TQ),
         recepteurs,
+        nbRecepteurs: Object.values(nbRep).reduce((t, n) => t + n, 0),
       };
     });
   }
@@ -10903,6 +10936,7 @@ async function ouvrirPlan(zone, id, arg) {
           poles: "1P+N",
           section: String(x.sec).replace(".", ","),
           picto: picto(x),
+          recepteurs: x.nbRecepteurs || "",
         })),
       ];
       for (const m of mods) for (const c of Object.keys(m)) if (m[c] === "") delete m[c];
@@ -14450,7 +14484,7 @@ ${parPiece || hors.length ? `<h2>Par pièce</h2><div class="pieces">${parPiece}$
             ),
             ligne(
               "",
-              "Petite lettre orange dans le coin : l'outil a des options, un 2e appui (outil déjà pris) ouvre le menu. Main levée : M = murs, pièces et portes, S = symboles et liaisons, N = notes libres ; Porte : P = porte, L = libre, sans porte",
+              "Petite lettre orange dans le coin : l'outil a des options, un 2e appui (outil déjà pris) ouvre le menu ; au clavier, la même touche (H, U, P) passe au choix suivant. Main levée : M = murs, pièces et portes, S = symboles et liaisons, N = notes libres ; Porte : P = porte, L = libre, sans porte",
               "✍ M / S / N"
             ),
             ligne("", "Plein écran (colonne bleue de gauche)", "⛶")
@@ -16056,6 +16090,22 @@ ${parPiece || hors.length ? `<h2>Par pièce</h2><div class="pieces">${parPiece}$
       );
       return;
     } // (H de nouveau : mode suivant)
+    // (outils à plusieurs choix : la même touche passe au choix suivant)
+    if (o === "gaine" && etat.outil === "gaine") {
+      e.preventDefault();
+      const suiv = { gaine: "moulure", moulure: "goulotte", goulotte: "gaine" }[etat.conduitOutil || "gaine"] || "gaine";
+      choisirConduit(suiv);
+      toast({ gaine: "⌇ Gaine", moulure: "▬ Moulure", goulotte: "▭ Goulotte" }[suiv] + " (U : choix suivant)");
+      return;
+    }
+    if (o === "porte" && etat.outil === "porte") {
+      e.preventDefault();
+      etat.genrePorte = etat.genrePorte === "passage" ? "porte" : "passage";
+      majBoutonsOptions();
+      choisirOutil("porte");
+      toast((etat.genrePorte === "passage" ? "Ouverture libre, sans porte" : "Porte (battant)") + " (P : choix suivant)");
+      return;
+    }
     if (o) {
       e.preventDefault();
       choisirOutil(o);
