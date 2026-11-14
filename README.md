@@ -4,9 +4,25 @@ PLANS 2D, de masse, de maison. Avec spécialité pour électricien — module de
 ========================================================================
 Pour les plus pressés de tester voici le lien pour utiliser le logiciel: https://zoliaaz.github.io/DF-Artisan-Module-Plan/
 
+Tout d'abord, je ne suis pas développeur, j'ai fait ce logiciel avec l'IA Claude. Je suis électricien, et ce module est fait pour répondre à mes besoins, mais il doit pouvoir dépanner d'autres personnes.
+Si vous faites un retour de bug ou autre, je ne pourrais pas forcément répondre rapidement et encore moins corriger ou rajouté une fonction rapidement. Car le logiciel étant complexe il faut un abonnement à l'ia pour qu'elle corrige les choses.
+Si c'est lié aux symboles, ça doit pouvoir se corriger facilement, car actuellement ils ne sont pas forcément tous bien.
 
-Plans d'implantation électrique en 2D : murs, portes, fenêtres, appareillage (symboles
-NF C 15-100), liaisons interrupteur → lumières, circuits, liste du matériel, impression.
+Le module a été pensé pour que les plans et l'implantation électrique puisse se faire sur tablette avec le doigt. Mais cela se fait très bien à la souris, il y a plein de manière de faire la même chose pour s'adapter à notre humeur du moment.
+
+Plans d'implantation électrique en 2D :
+-Murs, portes, fenêtres (le tout traçables au doigt sur tablette)
+-Image de fond avec reconnaissance des murs (pas parfait mais ça peut aider)
+-Quelque simple élément mobilier/sanitaire.
+-Étage possible
+
+Partie électrique: 
+-Implantation d'appareillage (prise, bouton etc) 
+-Liaisons entre bouton et lumières
+-Plan de pieuvre (gaines avec leur conducteur) + Registre des gaines avec un calcul des longueurs (attention pas 100% précis)
+-Plan de moulure (avec leur conducteur) + Registre des gaines avec un calcul des longueurs et des différents angles (attention pas 100% précis)
+-Attribution des disjoncteurs aux différents appareillages
+
 Gratuit, sans installation, sur PC comme sur tablette, même hors connexion.
 
 Module issu de DF artisan, logiciel de devis et factures spécialisé dans le bâtiment, EN COURS DE
@@ -14,10 +30,7 @@ DÉVELOPPEMENT : il peut comporter des erreurs, vérifiez toujours vos plans.
 - Alertes NF C 15-100 : désactivées au départ ; à activer dans ⚙ Options du plan > Circuits. C'est une
   aide pour électricien averti : elles peuvent être fausses ou incomplètes et ne remplacent ni la norme
   ni la vérification sur place.
-- Un bug, une idée : ouvrez une « issue » sur la page GitHub du projet (lien en bas de la colonne de
-  gauche de la page en ligne).
-- Licence : la même que DF artisan (LICENCE.txt) : gratuit, modifiable, mais ni vente ni exploitation
-  commerciale du logiciel, même modifié.
+- Licence : la même que DF artisan (LICENCE.txt) : gratuit, modifiable, mais vente du logiciel interdite, même modifié.
 
 UTILISER
 - En ligne : ouvrez l'adresse de la page dans Chrome, Edge ou Firefox. Sur une tablette, menu du
