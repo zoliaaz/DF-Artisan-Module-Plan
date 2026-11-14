@@ -4,7 +4,8 @@ PLANS 2D, de masse, de maison. Avec spécialité pour électricien — module de
 ========================================================================
 Pour les plus pressés de tester voici le lien pour utiliser le logiciel: https://zoliaaz.github.io/DF-Artisan-Module-Plan/
 
-Tout d'abord, je ne suis pas développeur, j'ai fait ce logiciel avec l'IA Claude. Je suis électricien, et ce module est fait pour répondre à mes besoins, mais il doit pouvoir dépanner d'autres personnes.
+Tout d'abord, je ne suis pas développeur, j'ai fait ce logiciel avec l'IA Claude, cependant j'ai passé environ 15h dessus. 
+Je suis électricien, et ce module est fait avant tout pour répondre à mes besoins, mais il doit pouvoir dépanner d'autres personnes.
 Si vous faites un retour de bug ou autre, je ne pourrais pas forcément répondre rapidement et encore moins corriger ou rajouté une fonction rapidement. Car le logiciel étant complexe il faut un abonnement à l'ia pour qu'elle corrige les choses.
 Si c'est lié aux symboles, ça doit pouvoir se corriger facilement, car actuellement ils ne sont pas forcément tous bien.
 
