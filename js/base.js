@@ -1095,7 +1095,24 @@ function boutonRetour(d) {
     "← " + lib
   );
 }
+let allerEnCours = null; // (page en train de s'afficher : un 2e clic sur le même menu ne l'affiche pas deux fois)
 async function aller(section, arg) {
+  let cle;
+  try {
+    cle = section + "|" + JSON.stringify(arg || null);
+  } catch (e) {
+    cle = section + "|" + Math.random(); // (argument non sérialisable : jamais regroupé)
+  }
+  if (allerEnCours && allerEnCours.cle === cle) return allerEnCours.promesse;
+  const promesse = allerVraiment(section, arg);
+  allerEnCours = { cle, promesse };
+  try {
+    return await promesse;
+  } finally {
+    if (allerEnCours && allerEnCours.promesse === promesse) allerEnCours = null;
+  }
+}
+async function allerVraiment(section, arg) {
   if (avantDeQuitter) {
     const ok = await avantDeQuitter();
     if (ok === false) return;
