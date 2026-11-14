@@ -2,6 +2,8 @@
 
 PLANS 2D, de masse, de maison. Avec spécialité pour électricien — module de plans de DF artisan, en version autonome
 ========================================================================
+Pour les plus pressés de tester voici le lien pour utiliser le logiciel: https://zoliaaz.github.io/DF-Artisan-Module-Plan/
+
 
 Plans d'implantation électrique en 2D : murs, portes, fenêtres, appareillage (symboles
 NF C 15-100), liaisons interrupteur → lumières, circuits, liste du matériel, impression.
