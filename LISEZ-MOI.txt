@@ -13,7 +13,7 @@ DÉVELOPPEMENT : il peut comporter des erreurs, vérifiez toujours vos plans.
 - Un bug, une idée : ouvrez une « issue » sur la page GitHub du projet (lien en bas de la colonne de
   gauche de la page en ligne).
 - Licence : la même que DF artisan (LICENCE.txt) : gratuit, modifiable, utilisable pour votre activité
-  professionnelle (faire vos plans de chantier) ; le module lui-même ne peut pas être vendu, même modifié.
+  professionnelle (faire vos plans de chantier) ; le module lui-même ne peut pas être vendu, même modifié, ni proposé comme service en ligne payant (SaaS).
 
 UTILISER
 - En ligne : ouvrez l'adresse de la page dans Chrome, Edge ou Firefox. Sur une tablette, menu du

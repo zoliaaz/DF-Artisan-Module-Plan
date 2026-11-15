@@ -1599,7 +1599,18 @@ function empreintePlan(donnees) {
           )
         : v;
   const d = { ...(donnees || {}) };
-  for (const k of ["vue", "taille_symb", "origine_autonome", "empreinte_import", "tableau_id", "tableaux_armoires"]) delete d[k];
+  for (const k of [
+    "vue",
+    "taille_symb",
+    "origine_autonome",
+    "empreinte_import",
+    "tableau_id",
+    "tableaux_armoires",
+    "etiquettes_id",
+    "etiquettes_armoires",
+    "etiquettes_le",
+  ])
+    delete d[k];
   const s = JSON.stringify(tri(d));
   let h1 = 0xdeadbeef,
     h2 = 0x41c6ce57; // (cyrb53)
@@ -1820,6 +1831,8 @@ async function importerDepuisAutonome() {
         } else {
           delete donnees.tableau_id;
           delete donnees.tableaux_armoires;
+          delete donnees.etiquettes_id;
+          delete donnees.etiquettes_armoires;
           await api("POST", "/api/plans", {
             nom: (a.p.nom || "Plan") + (a.conflit ? " (tablette)" : ""),
             adresse: a.p.adresse || "",
@@ -1961,6 +1974,13 @@ async function sectionPlans(zone, arg) {
                               },
                             },
                             "→ Étiquettes"
+                          )
+                        : null,
+                      (PARAMS.general || {}).module_etiquettes && p.etiquettes_le
+                        ? h(
+                            "span",
+                            { class: "sous", style: "margin-left:6px", title: "Tableau (module maison) déjà fait depuis ce plan" },
+                            "fait le " + dateFr(p.etiquettes_le)
                           )
                         : null,
                       p.tableau_le
@@ -2698,7 +2718,7 @@ async function ouvrirPlan(zone, id, arg) {
       "select",
       {},
       h("option", { value: "type" }, "Alim PC, Alim LUM… (couleur du circuit)"),
-      h("option", { value: "numero" }, "C1, C2… (numéro du départ)")
+      h("option", { value: "numero" }, "Q1, Q2… (repère du disjoncteur)")
     );
     gAlim.value = o.repere_alim === "numero" ? "numero" : "type";
     const gLet = h(
@@ -4356,6 +4376,25 @@ async function ouvrirPlan(zone, id, arg) {
   /** tableaux électriques (armoires) de tous les niveaux ; la tête : celui qui n'est alimenté par aucun autre */
   const tableauxPlan = () => objetsPartout().filter(o => o.type === "tableau");
   const nomArmoire = o => (o && o.num) || "Tableau";
+  /** repère du disjoncteur de chaque circuit : celui donné par plan → tableau (Q1, Q2… dans l'ordre du tableau, de
+   *  gauche à droite), sinon le suivant libre */
+  function repsCircuits() {
+    const res = new Map(),
+      pris = new Set(d.circuits.map(c => c.rep).filter(Boolean));
+    let n = 0;
+    for (const c of d.circuits) {
+      if (c.rep) {
+        res.set(c.id, c.rep);
+        continue;
+      }
+      do n++;
+      while (pris.has("Q" + n));
+      pris.add("Q" + n);
+      res.set(c.id, "Q" + n);
+    }
+    return res;
+  }
+  const repDe = c => (c && repsCircuits().get(c.id)) || "Q?";
   function teteArmoires() {
     const ts = tableauxPlan();
     return ts.find(t => !t.alim || !ts.some(x => x.id === t.alim)) || ts[0] || null;
@@ -6188,8 +6227,11 @@ async function ouvrirPlan(zone, id, arg) {
             { style: "display:flex;gap:4px;align-items:center" },
             h(
               "b",
-              { title: "Numéro du départ (repère des gaines entre boîtes : C1, C2…)", style: "min-width:24px;font-size:12px" },
-              "C" + (d.circuits.indexOf(c) + 1)
+              {
+                title: "Repère du disjoncteur (Q1, Q2… : le même dans le tableau ; repère des gaines entre boîtes)",
+                style: "min-width:24px;font-size:12px",
+              },
+              repDe(c)
             ),
             coul,
             nomC,
@@ -9841,9 +9883,7 @@ async function ouvrirPlan(zone, id, arg) {
       "select",
       {},
       h("option", { value: "" }, "Nouveau départ « Éclairage »"),
-      d.circuits.map((c, i) =>
-        h("option", { value: c.id }, "C" + (i + 1) + " · " + (c.nom || "Circuit") + " (" + (c.calibre || 16) + " A)")
-      )
+      d.circuits.map((c, i) => h("option", { value: c.id }, repDe(c) + " · " + (c.nom || "Circuit") + " (" + (c.calibre || 16) + " A)"))
     );
     const dejaEcl = d.circuits.find(c => c.id === etat.circuitVu) || d.circuits.find(c => /clairage|lumi/i.test(c.nom || ""));
     depart.value = dejaEcl ? dejaEcl.id : "";
@@ -10755,7 +10795,7 @@ async function ouvrirPlan(zone, id, arg) {
       const lum = !!(picto && /^swb_(ecl|eclext|pc)\.svg$/.test(picto[1])) && pieces.length;
       return {
         c,
-        rep: "C" + (i + 1),
+        rep: repDe(c), // (repère du disjoncteur : le même dans le tableau)
         circuit: c.nom || "",
         nom: lum ? pieces.join(", ") : c.nom || "Circuit " + (i + 1),
         note: lum ? c.nom || (picto[1] === "swb_pc.svg" ? "Prises" : "Éclairage") : "",
@@ -10797,7 +10837,7 @@ async function ouvrirPlan(zone, id, arg) {
     return [...groupes, ...bornes];
   }
   /** projet du module Tableaux : une rangée par interrupteur différentiel 30 mA */
-  function projetTableau(lignes, nomTableau, filles) {
+  function projetTableau(lignes, nomTableau, filles, cpt) {
     const MOD = {
       id: "",
       icon: null,
@@ -10829,7 +10869,9 @@ async function ouvrirPlan(zone, id, arg) {
     };
     const PAS = 13,
       groupes = repartirDifferentiels(lignes).filter(g => g.l.length);
-    let nq = 0;
+    // (repères Q1, Q2… dans l'ordre du tableau, de gauche à droite ; les circuits du plan les reprennent ensuite)
+    cpt = cpt || { n: 0, reps: new Map() };
+    let nq = cpt.n;
     const tete = [];
     if ((filles || []).length) {
       // (alimentation des armoires divisionnaires : un disjoncteur par armoire, « → nom » dans sa description)
@@ -10882,7 +10924,7 @@ async function ouvrirPlan(zone, id, arg) {
       for (const x of g.l)
         rangee.push({
           ...MOD,
-          id: "Q" + ++nq,
+          id: (cpt.reps.set(x.c.id, "Q" + ++nq), "Q" + nq),
           free: false,
           func: "q",
           crb: "C",
@@ -10893,54 +10935,38 @@ async function ouvrirPlan(zone, id, arg) {
           icon: x.icone,
           modtype: x.modtype,
           text: x.nom,
-          desc: [x.rep, x.note || x.pieces.join(", "), x.recepteurs].filter(Boolean).join(" · "),
+          desc: [x.note || x.pieces.join(", "), x.recepteurs].filter(Boolean).join(" · "),
         });
       const pris = rangee.reduce((t, m) => t + m.span, 0);
       for (let i = pris; i < PAS; i++) rangee.push({ ...MOD });
       return rangee;
     });
     rows.unshift(...tete);
+    cpt.n = nq;
     while (rows.length < 2) rows.push(Array.from({ length: PAS }, () => ({ ...MOD })));
     return { prjname: nomTableau, projectType: "R", stepsPerRows: PAS, rows };
   }
   /** étiquettes de tableau (module maison) d'après les circuits : un différentiel puis ses départs, rangés comme pour
-   *  le tableau (8 circuits au plus par différentiel) ; une rangée par différentiel tant qu'elle tient */
-  async function versEtiquettes() {
-    const lignes = circuitsTableau(),
-      groupes = repartirDifferentiels(lignes).filter(g => g.l.length);
-    if (!lignes.length) return toast("Aucun circuit dans ce plan.", true);
+   *  le tableau (8 circuits au plus par différentiel) ; une rangée par différentiel tant qu'elle tient. Plusieurs
+   *  armoires dans le plan : un tableau par armoire, l'armoire mère avec un départ « Alim … » pour chacune, reliés en
+   *  installation (synoptique). Comme pour Tiquettes : aperçu, puis nouveau tableau ou remplacement du précédent. */
+  /** les circuits du plan prennent les repères du tableau (Q1, Q2… de gauche à droite) et son ordre */
+  function repsDuTableau(cpt) {
+    for (const c of d.circuits) if (cpt.reps.has(c.id)) c.rep = cpt.reps.get(c.id);
+    const num = c => parseInt(String(c.rep || "").replace(/\D/g, ""), 10) || 9999;
+    d.circuits.sort((a, b) => num(a) - num(b));
+  }
+  function rangeesEtiquettes(lignes, filles, cpt) {
     const picto = x => (typeof etPictoDepuis === "function" ? etPictoDepuis(x.icone) : "");
     const PAS = 13,
-      rangees = [];
-    let nq = 0,
-      cur = [],
+      rangees = [],
+      groupes = repartirDifferentiels(lignes).filter(g => g.l.length);
+    // (repères Q1, Q2… dans l'ordre du tableau, de gauche à droite — suite d'un tableau à l'autre d'une installation ;
+    //  les circuits du plan les reprennent ensuite)
+    cpt = cpt || { n: 0, reps: new Map() };
+    let cur = [],
       pris = 0;
-    groupes.forEach((g, k) => {
-      const mods = [
-        {
-          genre: "diff",
-          rep: "ID" + (k + 1),
-          texte: g.irve ? "Différentiel borne" : "Différentiel",
-          calibre: "40 A",
-          sens: "30 mA",
-          type: g.irve ? "" : g.typeA ? "A" : "AC",
-          poles: "2P",
-          picto: "differentiel",
-        },
-        ...g.l.map(x => ({
-          genre: "disj",
-          rep: "Q" + ++nq,
-          texte: x.nom,
-          desc: [x.circuit && x.circuit !== x.nom ? x.circuit : "", x.recepteurs].filter(Boolean).join(" · "),
-          calibre: x.cal + " A",
-          poles: "1P+N",
-          section: String(x.sec).replace(".", ","),
-          picto: picto(x),
-          recepteurs: x.nbRecepteurs || "",
-        })),
-      ];
-      for (const m of mods) for (const c of Object.keys(m)) if (m[c] === "") delete m[c];
-      const largeur = 2 + g.l.length;
+    const ajouter = (mods, largeur) => {
       if (cur.length && pris + largeur > PAS) {
         rangees.push({ modules: cur });
         cur = [];
@@ -10948,18 +10974,319 @@ async function ouvrirPlan(zone, id, arg) {
       }
       cur.push(...mods);
       pris += largeur;
+    };
+    // (alimentation des armoires divisionnaires : un disjoncteur par armoire, en tête)
+    for (const f of filles || []) {
+      const rep = "Q" + ++cpt.n;
+      f._depart = rep;
+      ajouter(
+        [
+          {
+            genre: "disj",
+            rep,
+            texte: "Alim " + nomArmoire(f),
+            calibre: (f.alim_cal || 32) + " A",
+            courbe: "C",
+            poles: "1P+N",
+            section: String(f.alim_sec || "10").replace(".", ","),
+            alimente: nomArmoire(f),
+          },
+        ],
+        1
+      );
+    }
+    groupes.forEach((g, k) => {
+      const mods = [
+        {
+          genre: "diff",
+          rep: "ID" + (k + 1),
+          texte: g.irve ? "Différentiel borne" : "Différentiel",
+          desc: g.irve ? "Type selon la notice de la borne (A, F ou B)" : "",
+          calibre: "40 A",
+          sens: "30 mA",
+          type: g.irve ? "" : g.typeA ? "A" : "AC",
+          poles: "2P",
+          picto: "differentiel",
+        },
+        ...g.l.map(x => {
+          // (type de circuit en texte, d'après le pictogramme — « Prises », « Éclairage », « Four »… —, sinon le nom du
+          //  circuit ; les pièces en annotation)
+          const pg = picto(x),
+            type = pg && typeof ET_PICTOS !== "undefined" && ET_PICTOS[pg] ? ET_PICTOS[pg][0] : "",
+            nomC = x.circuit || x.nom,
+            pieces = x.pieces.join(", ");
+          const rep = "Q" + ++cpt.n;
+          cpt.reps.set(x.c.id, rep);
+          return {
+            genre: "disj",
+            rep,
+            texte: type || nomC,
+            texte_auto: type ? true : "",
+            desc: pieces || (type && nomC !== type ? nomC : ""),
+            calibre: x.cal + " A",
+            courbe: "C",
+            poles: "1P+N",
+            section: String(x.sec).replace(".", ","),
+            picto: pg,
+            recepteurs: x.nbRecepteurs || "",
+          };
+        }),
+      ];
+      for (const m of mods) for (const c of Object.keys(m)) if (m[c] === "") delete m[c];
+      ajouter(mods, 2 + g.l.length);
     });
     if (cur.length) rangees.push({ modules: cur });
-    const n = await api("POST", "/api/plans", {
-      genre: "etiquettes",
-      nom: "Étiquettes — " + (nom.value || "Plan"),
-      client_id: p.client_id || null,
-      document_id: p.document_id || null,
-      adresse: p.adresse || "",
-      donnees: { format: { pas: 18, hauteur: 30, modules: PAS }, theme: (PARAMS.etiquettes || {}).theme_defaut || "classique", rangees },
+    if (!rangees.length) rangees.push({ modules: [] });
+    return rangees;
+  }
+  async function versEtiquettes() {
+    const lignes = circuitsTableau();
+    if (!lignes.length) return toast("Aucun circuit dans ce plan.", true);
+    const ts = tableauxPlan(),
+      plusieurs = ts.length > 1,
+      tete = plusieurs ? teteArmoires() : null;
+    const mere = t => (t === tete ? null : ts.find(x => x.id === t.alim && x !== t) || tete);
+    const filles = t => ts.filter(x => x !== tete && x !== t && mere(x) === t);
+    const ordre = [];
+    if (plusieurs) {
+      const aj = t => {
+        if (ordre.includes(t)) return;
+        ordre.push(t);
+        filles(t).forEach(aj);
+      };
+      aj(tete);
+      ts.forEach(aj);
+    }
+    const de = new Map(lignes.map(x => [x, plusieurs ? armoireDuCircuit(x.c) : null]));
+    // (déjà faits depuis ce plan : à remplacer, ou nouveaux)
+    const deja = plusieurs ? d.etiquettes_armoires || {} : d.etiquettes_id ? { un: d.etiquettes_id } : {};
+    const existants = {};
+    for (const [k, id] of Object.entries(deja)) {
+      const q = await api("GET", "/api/plans/" + id).catch(() => null);
+      if (q && q.genre === "etiquettes") existants[k] = q;
+    }
+    const nbDeja = Object.keys(existants).length;
+    const nomT = h("input", {
+      type: "text",
+      value: (existants.un && existants.un.nom) || "Tableau — " + (nom.value || "Plan"),
+      style: "width:100%",
     });
-    toast("Étiquettes créées d'après les " + lignes.length + " circuits du plan.");
-    aller("etiquettes", { id: n.id });
+    const choix = h(
+      "select",
+      {},
+      nbDeja
+        ? h(
+            "option",
+            { value: "remplacer" },
+            nbDeja > 1
+              ? "Remplacer les " + nbDeja + " tableaux déjà faits depuis ce plan"
+              : "Remplacer le tableau « " + (Object.values(existants)[0].nom || "Tableau") + " »"
+          )
+        : null,
+      h("option", { value: "nouveau" }, plusieurs ? "Nouveaux tableaux" : "Nouveau tableau")
+    );
+    // (repères qu'auront les disjoncteurs : dans l'ordre du tableau ; un essai à blanc pour l'aperçu)
+    const numeroter = cpt => {
+      if (!plusieurs) return [rangeesEtiquettes(lignes, [], cpt)];
+      return ordre.map(t =>
+        rangeesEtiquettes(
+          lignes.filter(x => de.get(x) === t),
+          filles(t),
+          cpt
+        )
+      );
+    };
+    const essai = { n: 0, reps: new Map() };
+    numeroter(essai);
+    // aperçu : les circuits, par armoire
+    const groupes = repartirDifferentiels(lignes).filter(g => g.l.length);
+    const idDe = x => {
+      const k = groupes.findIndex(g => g.l.includes(x));
+      return k < 0 ? "" : "ID" + (k + 1) + " · " + (groupes[k].irve ? "à elle seule" : "type " + (groupes[k].typeA ? "A" : "AC"));
+    };
+    const corps = h("tbody", {});
+    const ligne = x =>
+      h(
+        "tr",
+        {},
+        h(
+          "td",
+          {},
+          h("b", {}, essai.reps.get(x.c.id) || x.rep),
+          x.rep !== essai.reps.get(x.c.id) ? h("span", { class: "sous" }, " (" + x.rep + ")") : null
+        ),
+        h(
+          "td",
+          {},
+          (() => {
+            const pg = typeof etPictoDepuis === "function" ? etPictoDepuis(x.icone) : "";
+            return pg && typeof ET_PICTOS !== "undefined" && ET_PICTOS[pg] ? ET_PICTOS[pg][0] : x.circuit || x.nom;
+          })()
+        ),
+        h("td", { class: "sous" }, x.pieces.join(", ") || "—"),
+        h("td", {}, x.cal + " A"),
+        h("td", {}, String(x.sec).replace(".", ",") + " mm²"),
+        h("td", { class: "sous" }, x.nbRecepteurs ? String(x.nbRecepteurs) : ""),
+        h("td", { class: "sous" }, plusieurs ? "" : idDe(x))
+      );
+    if (plusieurs)
+      for (const t of ordre) {
+        const m = mere(t);
+        corps.append(
+          h(
+            "tr",
+            {},
+            h(
+              "td",
+              { colspan: 7, style: "background:var(--fond-doux, #f1f5f9)" },
+              h("b", {}, "⚡ " + nomArmoire(t)),
+              t.batiment ? " — " + t.batiment : "",
+              h("span", { class: "sous" }, m ? "  ← " + nomArmoire(m) + " (" + (t.alim_cal || 32) + " A)" : "  tête de l'installation")
+            )
+          )
+        );
+        for (const f of filles(t))
+          corps.append(
+            h(
+              "tr",
+              {},
+              h("td", {}, ""),
+              h("td", {}, "Alim " + nomArmoire(f)),
+              h("td", { class: "sous" }, "→ " + nomArmoire(f)),
+              h("td", {}, (f.alim_cal || 32) + " A"),
+              h("td", {}, String(f.alim_sec || "10").replace(".", ",") + " mm²"),
+              h("td"),
+              h("td")
+            )
+          );
+        lignes.filter(x => de.get(x) === t).forEach(x => corps.append(ligne(x)));
+      }
+    else lignes.forEach(x => corps.append(ligne(x)));
+    ouvrirModale(
+      plusieurs ? "Plan → tableaux, module maison (" + ts.length + " armoires)" : "Plan → tableau, module maison",
+      h(
+        "div",
+        { class: "pile" },
+        h(
+          "p",
+          { class: "aide", style: "margin:0" },
+          "Un disjoncteur par circuit du plan, numéroté Q1, Q2… dans l'ordre du tableau (de gauche à droite) ; le plan reprend ces repères et cet ordre (ancien repère entre parenthèses) : type de circuit, pièces (annotation), calibre (courbe C), section, nombre de récepteurs ; rangés sous des interrupteurs différentiels 30 mA (8 circuits au plus chacun, type A pour la cuisson et le lave-linge, un à elle pour la borne de recharge ; éclairage et prises répartis)." +
+            (plusieurs
+              ? " Un tableau par armoire du plan, l'armoire mère avec un disjoncteur « Alim … » pour chaque armoire qu'elle alimente : ils forment une installation (onglets, synoptique)."
+              : "")
+        ),
+        h(
+          "div",
+          { style: "max-height:46vh;overflow:auto" },
+          h(
+            "table",
+            { class: "resultats" },
+            h(
+              "thead",
+              {},
+              h(
+                "tr",
+                {},
+                ["", "Type de circuit", "Pièces", "Disj.", "Section", "Récept.", plusieurs ? "" : "Différentiel"].map(t => h("th", {}, t))
+              )
+            ),
+            corps
+          )
+        ),
+        plusieurs ? null : h("label", { class: "champ" }, h("span", {}, "Nom du tableau"), nomT),
+        h("label", { class: "champ" }, h("span", {}, plusieurs ? "Tableaux" : "Tableau"), choix)
+      ),
+      [
+        h("button", { class: "btn", onclick: fermerModale }, "Annuler"),
+        h(
+          "button",
+          {
+            class: "btn principal",
+            onclick: async () => {
+              try {
+                const remplacer = choix.value === "remplacer";
+                if (
+                  remplacer &&
+                  !(await demanderOui("Remplacer les étiquettes par celles du plan ? (ce qui y a été fait à la main sera perdu)"))
+                )
+                  return;
+                const base = {
+                  format: { pas: 18, hauteur: 30, modules: 13 },
+                  theme: (PARAMS.etiquettes || {}).theme_defaut || "classique",
+                  installation: "mono",
+                };
+                const ecrireEt = async (cle, nomE, donnees) => {
+                  const ex = remplacer ? existants[cle] : null;
+                  if (ex) {
+                    const dd = ex.donnees || {};
+                    await api("PUT", "/api/plans/" + ex.id, {
+                      nom: nomE,
+                      donnees: { ...base, ...dd, ...donnees, format: dd.format || base.format, theme: dd.theme || base.theme },
+                    });
+                    return ex.id;
+                  }
+                  return (
+                    await api("POST", "/api/plans", {
+                      genre: "etiquettes",
+                      nom: nomE,
+                      client_id: p.client_id || null,
+                      document_id: p.document_id || null,
+                      adresse: p.adresse || "",
+                      donnees: { ...base, ...donnees },
+                    })
+                  ).id;
+                };
+                let premier = null;
+                const cpt = { n: 0, reps: new Map() };
+                if (!plusieurs) {
+                  premier = await ecrireEt("un", nomT.value.trim() || "Tableau", { rangees: rangeesEtiquettes(lignes, [], cpt) });
+                  d.etiquettes_id = premier;
+                } else {
+                  const groupeA = "plan-" + p.id + "-" + Date.now().toString(36),
+                    ids = {};
+                  for (const t of ordre) {
+                    const rangees = rangeesEtiquettes(
+                      lignes.filter(x => de.get(x) === t),
+                      filles(t),
+                      cpt
+                    );
+                    const m = mere(t),
+                      ex = remplacer ? existants[t.id] : null;
+                    const armoire = {
+                      parent: m ? ids[m.id] : null,
+                      depart: m ? t._depart || "" : "",
+                      libelle: m && t._depart ? t._depart + " " + (t.alim_cal || 32) + " A" : "",
+                      batiment: t.batiment || "",
+                      groupe: (ex && (ex.donnees || {}).armoire && ex.donnees.armoire.groupe) || groupeA,
+                    };
+                    ids[t.id] = await ecrireEt(t.id, nomArmoire(t), { rangees, armoire, multi_tableaux: true });
+                    if (!premier) premier = ids[t.id];
+                  }
+                  ts.forEach(t => delete t._depart);
+                  d.etiquettes_armoires = ids;
+                }
+                // (les circuits du plan prennent les repères du tableau, et son ordre : plan, schéma et tableau
+                //  restent cohérents, lus de gauche à droite)
+                repsDuTableau(cpt);
+                d.etiquettes_le = new Date().toISOString().slice(0, 10);
+                fermerModale();
+                await enregistrer();
+                toast(
+                  plusieurs
+                    ? ts.length + " tableaux créés d'après le plan."
+                    : "Tableau créé d'après les " + lignes.length + " circuits du plan."
+                );
+                aller("etiquettes", { id: premier });
+              } catch (e) {
+                erreur(e);
+              }
+            },
+          },
+          plusieurs ? "Créer les tableaux" : "Créer le tableau"
+        ),
+      ],
+      { largeur: "min(760px, 96vw)" }
+    );
   }
   async function versTableau() {
     if (tableauxPlan().length > 1) return versTableaux();
@@ -11045,7 +11372,9 @@ async function ouvrirPlan(zone, id, arg) {
                   ))
                 )
                   return;
-                const switchboard = projetTableau(lignes, nomT.value.trim() || "Tableau électrique");
+                const cpt = { n: 0, reps: new Map() };
+                const switchboard = projetTableau(lignes, nomT.value.trim() || "Tableau électrique", [], cpt);
+                repsDuTableau(cpt);
                 let id = deja && choix.value === "remplacer" ? deja.id : null;
                 if (id)
                   await api("PUT", "/api/plans/" + id, { nom: switchboard.prjname, donnees: { ...(deja.donnees || {}), switchboard } });
@@ -11211,12 +11540,14 @@ async function ouvrirPlan(zone, id, arg) {
                   return;
                 const groupeA = "plan-" + p.id + "-" + Date.now().toString(36),
                   ids = {};
+                const cpt = { n: 0, reps: new Map() };
                 for (const t of ordre) {
                   const fs = filles(t),
                     sw = projetTableau(
                       lignes.filter(x => de.get(x) === t),
                       nomArmoire(t),
-                      fs
+                      fs,
+                      cpt
                     );
                   const m = mere(t),
                     armoire = {
@@ -11254,6 +11585,7 @@ async function ouvrirPlan(zone, id, arg) {
                   delete t._depart;
                 });
                 d.tableaux_armoires = ids;
+                repsDuTableau(cpt);
                 d.tableau_le = new Date().toISOString().slice(0, 10);
                 fermerModale();
                 await enregistrer();
@@ -13814,7 +14146,7 @@ ${parPiece || hors.length ? `<h2>Par pièce</h2><div class="pieces">${parPiece}$
       const ic = d.circuits.findIndex(x => x.id === o.circuit);
       if (!c)
         parCircuit.set(k, {
-          rep: ic >= 0 ? reperesAlim()[o.circuit] || "C" + (ic + 1) : "?",
+          rep: ic >= 0 ? reperesAlim()[o.circuit] || repDe(d.circuits[ic]) : "?",
           coulRep: ic >= 0 && optPlans().repere_alim !== "numero" ? d.circuits[ic].couleur : null,
           fils: ["P", "N", "T"],
           section: sec,
@@ -13857,12 +14189,12 @@ ${parPiece || hors.length ? `<h2>Par pièce</h2><div class="pieces">${parPiece}$
     return [...lots, ...(g.ajouts || [])];
   }
   /** repère des alimentations entre boîtes : « Alim PC », « Alim LUM », « Alim RAD »… d'après les appareils du circuit
-   *  (écrit à la couleur du circuit ; deux circuits du même genre : « Alim PC », « Alim PC 2 ») ; ou C1, C2… (⚙ Options) */
+   *  (écrit à la couleur du circuit ; deux circuits du même genre : « Alim PC », « Alim PC 2 ») ; ou Q1, Q2… (⚙ Options) */
   function reperesAlim() {
     const res = {};
     if (optPlans().repere_alim === "numero") {
       d.circuits.forEach((c, i) => {
-        res[c.id] = "C" + (i + 1);
+        res[c.id] = repDe(c);
       });
       return res;
     }
@@ -13878,7 +14210,7 @@ ${parPiece || hors.length ? `<h2>Par pièce</h2><div class="pieces">${parPiece}$
           if (k) n[k] = (n[k] || 0) + 1;
         }
       const top = Object.entries(n).sort((a, b) => b[1] - a[1])[0];
-      const base = top ? "Alim " + top[0] : "C" + (i + 1);
+      const base = top ? "Alim " + top[0] : repDe(c);
       vus[base] = (vus[base] || 0) + 1;
       res[c.id] = vus[base] > 1 ? base + " " + vus[base] : base;
     });
@@ -15237,9 +15569,9 @@ ${parPiece || hors.length ? `<h2>Par pièce</h2><div class="pieces">${parPiece}$
         const n = d.objets.filter(ob => ob.circuit === c.id && (SYMB[ob.type] || {}).categorie !== "Commandes").length;
         el.push({
           h: 5.6,
-          w: 8 + `C${d.circuits.indexOf(c) + 1} · ${c.nom || "Circuit"} · ${c.calibre || ""} A`.length * 1.45 + 7,
+          w: 8 + `${repDe(c)} · ${c.nom || "Circuit"} · ${c.calibre || ""} A`.length * 1.45 + 7,
           svg: (x, y, l) =>
-            `<rect x="${x + 1}" y="${y + 1.2}" width="3.6" height="3.6" rx="0.6" fill="${c.couleur}"/><text x="${x + 8}" y="${y + 4}" font-size="2.8">${echapper(coupe(`C${d.circuits.indexOf(c) + 1} · ${c.nom || "Circuit"} · ${c.calibre || ""} A`, Math.round((l - 14) / 1.45)))}</text>` +
+            `<rect x="${x + 1}" y="${y + 1.2}" width="3.6" height="3.6" rx="0.6" fill="${c.couleur}"/><text x="${x + 8}" y="${y + 4}" font-size="2.8">${echapper(coupe(`${repDe(c)} · ${c.nom || "Circuit"} · ${c.calibre || ""} A`, Math.round((l - 14) / 1.45)))}</text>` +
             `<text x="${x + l - 3}" y="${y + 4}" font-size="2.8" text-anchor="end">${n}</text>`,
         });
       }

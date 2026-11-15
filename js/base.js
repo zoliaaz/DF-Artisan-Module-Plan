@@ -767,7 +767,7 @@ function entreesElectricien(G) {
     G.module_etiquettes
       ? [
           "etiquettes",
-          "Tableaux (module maison, alpha)",
+          "Tableaux (module maison, bêta)",
           "Tableaux maison",
           () => nouvellesEtiquettes({}, true).catch(erreur),
           "Nouvelles étiquettes de tableau",

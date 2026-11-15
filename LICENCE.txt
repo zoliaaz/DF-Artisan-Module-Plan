@@ -1,12 +1,12 @@
 LICENCE D'UTILISATION DE DF ARTISAN
-Version 1.0 du 1er novembre 2026
+Version 1.1 du 15 novembre 2026
 
 Copyright (c) 2026 Jérôme Guillon
 
 DF artisan (« Devis Facture artisan », anciennement BatiDevis) est un logiciel de devis et de factures
 pour les artisans du bâtiment (ci-après « le Logiciel »).
 Son auteur, Jérôme Guillon (ci-après « l'Auteur »), le met à disposition gratuitement aux conditions
-ci-dessous. Utiliser, copier, modifier ou diffuser le Logiciel vaut acceptation de cette licence. 
+ci-dessous. Utiliser, copier, modifier ou diffuser le Logiciel vaut acceptation de cette licence.
 
 
 ARTICLE 1 - CE QUI EST PERMIS, GRATUITEMENT
@@ -29,14 +29,20 @@ partie :
 
   a) le vendre, ou vendre une copie, une licence ou un droit de l'utiliser ;
   b) le louer, le proposer par abonnement, ou le faire payer sous quelque forme que ce soit ;
-  c) le proposer en ligne (hébergement, service internet, « logiciel en tant que service »)
-     contre paiement, ou en échange de publicité ou de données ;
+  c) le vendre ou le louer en ligne : le proposer à d'autres comme service hébergé ou service
+     internet (« logiciel en tant que service », SaaS, hébergement, infogérance), contre
+     paiement, abonnement, publicité ou données, même si l'accès au Logiciel est présenté comme
+     gratuit et que seul le service autour est payant ;
   d) l'inclure dans un produit, un logiciel, une offre ou un service payant ;
-  e) le diffuser sous un autre nom en s'en présentant comme l'auteur.
+  e) le diffuser sous un autre nom en s'en présentant comme l'auteur ;
+  f) plus généralement, vendre un produit ou un service (hébergement, installation, assistance
+     ou maintenance comprises) dont la valeur vient, entièrement ou pour l'essentiel, du
+     Logiciel ou de ses fonctions.
 
 L'Auteur reste seul à pouvoir accorder une autre autorisation, par écrit. Utiliser le Logiciel
 pour faire ses propres devis et factures et se faire payer ses travaux n'est pas une exploitation
-commerciale du Logiciel : c'est permis (article 1.1).
+commerciale du Logiciel : c'est permis (article 1.1). Une entreprise peut aussi installer le
+Logiciel sur son propre serveur pour ses seuls besoins et ceux de son personnel.
 
 
 ARTICLE 3 - CITER LE PROJET D'ORIGINE
@@ -69,7 +75,6 @@ Le Logiciel contient des éléments d'autres auteurs, qui restent soumis à leur
     LICENSE.txt, qui doit être conservé (sert à importer un plan PDF en fond de plan) ;
   - le profil de couleurs app/sRGB.icc, créé par Graeme W. Gill et placé dans le domaine public.
 La présente licence ne s'applique pas à ces éléments.
-
 
 ARTICLE 5 - AUCUNE GARANTIE
 

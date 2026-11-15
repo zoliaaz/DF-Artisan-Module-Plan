@@ -315,7 +315,8 @@ function remettreCurseur(el, c) {
   }
 }
 /** entrees : liste (ou fonction qui la donne) de { libelle, raccourci, action, sous: [...], desactive, danger, coche, garder, titre } ou "-" */
-// onglet fermé dans Firefox : DF artisan s'arrête aussi (Paramètres > Général), sauf si un autre onglet est ouvert
+// onglet fermé dans Firefox : DF artisan s'arrête aussi si c'est réglé (Paramètres > Général : « Arrêter DF artisan
+// quand son dernier onglet est fermé », décoché d'office), sauf si un autre onglet est ouvert
 (() => {
   const id = Math.random().toString(36).slice(2) + Date.now().toString(36);
   const envoyer = (u, corps) =>
@@ -325,7 +326,9 @@ function remettreCurseur(el, c) {
       headers: { "Content-Type": "application/json", "X-BatiDevis": "1" },
       body: JSON.stringify(corps),
     }).catch(() => {});
-  const vie = () => envoyer("/api/vie", { id });
+  const vie = () => {
+    if (typeof PARAMS !== "undefined" && PARAMS && (PARAMS.general || {}).arret_onglet_ferme === true) envoyer("/api/vie", { id });
+  };
   setTimeout(vie, 1500);
   setInterval(vie, 10000);
   window.addEventListener("pagehide", () => envoyer("/api/au-revoir", { id }));
