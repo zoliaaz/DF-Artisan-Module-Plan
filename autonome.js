@@ -233,7 +233,152 @@ async function exporterPlans() {
   a.click();
   a.remove();
   toast(plans.length + " plan(s) enregistré(s) dans le fichier.");
+  rappelSauvegarde.enregistre();
 }
+/* rappel d'enregistrement : les plans restent dans le navigateur ; s'ils ont changé depuis leur dernier
+ * enregistrement en fichier, depuis plus que le délai choisi (15 min par défaut ; 10, 30, 60 min ou jamais), un ⚠
+ * apparaît à côté de « + Nouveau plan » et de 💾 */
+const rappelSauvegarde = (() => {
+  const lire = (k, d) => {
+    try {
+      const v = localStorage.getItem(k);
+      return v === null ? d : v;
+    } catch {
+      return d;
+    }
+  };
+  const ecrire = (k, v) => {
+    try {
+      if (v === null) localStorage.removeItem(k);
+      else localStorage.setItem(k, String(v));
+    } catch {
+      /* (stockage indisponible) */
+    }
+  };
+  const minutes = () => Number(lire("pw_rappel_min", 15));
+  const maj = () => {
+    const depuis = Number(lire("pw_non_sauve_depuis", 0)),
+      m = minutes();
+    document.body.classList.toggle("a-sauver", !!depuis && m > 0 && Date.now() - depuis > m * 60000);
+  };
+  // (toute écriture d'un plan : « modifié depuis » — la première depuis le dernier enregistrement en fichier)
+  for (const f of ["ecrire", "effacer"]) {
+    const orig = STOCKAGE[f];
+    if (typeof orig !== "function") continue;
+    STOCKAGE[f] = async (...a) => {
+      const r = await orig.apply(STOCKAGE, a);
+      if (!Number(lire("pw_non_sauve_depuis", 0))) ecrire("pw_non_sauve_depuis", Date.now());
+      maj();
+      return r;
+    };
+  }
+  setInterval(maj, 30000);
+  setTimeout(maj, 1000);
+  return {
+    maj,
+    minutes,
+    enregistre: () => (ecrire("pw_non_sauve_depuis", null), maj()),
+    plusTard: () => (ecrire("pw_non_sauve_depuis", Date.now()), maj()),
+    regler: m => (ecrire("pw_rappel_min", m), maj()),
+    depuis: () => Number(lire("pw_non_sauve_depuis", 0)),
+  };
+})();
+window.alerteSauvegarde = () => {
+  const d = rappelSauvegarde.depuis(),
+    min = d ? Math.round((Date.now() - d) / 60000) : 0;
+  const choix = h(
+    "select",
+    {},
+    [
+      [10, "10 minutes"],
+      [15, "15 minutes"],
+      [30, "30 minutes"],
+      [60, "1 heure"],
+      [0, "jamais (rappel désactivé)"],
+    ].map(([v, l]) => h("option", { value: v }, l))
+  );
+  choix.value = String(rappelSauvegarde.minutes());
+  choix.addEventListener("change", () => rappelSauvegarde.regler(Number(choix.value)));
+  ouvrirModale(
+    "Plans à enregistrer",
+    h(
+      "div",
+      { class: "pile" },
+      h(
+        "p",
+        { style: "margin:0" },
+        "Vos plans ont changé " +
+          (min ? "depuis " + (min >= 60 ? Math.floor(min / 60) + " h " + (min % 60) + " min" : min + " min") + " " : "") +
+          "sans être enregistrés en fichier. Ils restent dans ce navigateur, mais un fichier les garde si le navigateur est vidé, ou pour les ouvrir sur un autre appareil."
+      ),
+      h("label", { class: "champ" }, h("span", {}, "Me le rappeler après"), choix)
+    ),
+    [
+      h("button", { class: "btn", onclick: () => (rappelSauvegarde.plusTard(), fermerModale()) }, "Plus tard"),
+      h("button", { class: "btn principal", onclick: () => (fermerModale(), exporterPlans().catch(erreur)) }, "💾 Enregistrer mes plans"),
+    ]
+  );
+};
+// installer comme une application (Android, Chrome, Edge : la demande du navigateur ; sinon, la marche à suivre)
+let demandeInstallation = null;
+window.addEventListener("beforeinstallprompt", e => {
+  e.preventDefault();
+  demandeInstallation = e;
+});
+(() => {
+  const b = document.getElementById("installer-appli");
+  if (!b) return;
+  const installee = () => (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+  if (installee()) b.style.display = "none";
+  window.addEventListener("appinstalled", () => (b.style.display = "none"));
+  b.addEventListener("click", async () => {
+    if (demandeInstallation) {
+      demandeInstallation.prompt();
+      try {
+        await demandeInstallation.userChoice;
+      } catch {
+        /* */
+      }
+      demandeInstallation = null;
+      return;
+    }
+    ouvrirModale(
+      "Installer l'application",
+      h(
+        "div",
+        { class: "pile" },
+        h(
+          "p",
+          { style: "margin:0" },
+          "Les plans s'installent comme une application : une icône sur l'écran d'accueil, en plein écran, utilisable hors connexion. Vos plans restent les mêmes."
+        ),
+        h(
+          "ul",
+          { style: "margin:0;padding-left:20px;line-height:1.6" },
+          h(
+            "li",
+            {},
+            h("b", {}, "Android (Chrome) : "),
+            "menu ⋮ en haut à droite, puis « Installer l'application » (ou « Ajouter à l'écran d'accueil »)."
+          ),
+          h("li", {}, h("b", {}, "iPhone, iPad (Safari) : "), "bouton Partager (carré avec une flèche), puis « Sur l'écran d'accueil »."),
+          h(
+            "li",
+            {},
+            h("b", {}, "Ordinateur (Chrome, Edge) : "),
+            "l'icône d'installation à droite de la barre d'adresse, ou menu ⋮ > « Installer… »."
+          )
+        ),
+        h(
+          "p",
+          { class: "sous", style: "margin:0" },
+          "Firefox sur ordinateur ne sait pas installer d'application : utilisez Chrome ou Edge pour cela."
+        )
+      ),
+      [h("button", { class: "btn principal", onclick: fermerModale }, "Fermer")]
+    );
+  });
+})();
 function importerPlans() {
   const f = h("input", { type: "file", accept: ".json,application/json" });
   f.addEventListener("change", async () => {
@@ -349,6 +494,78 @@ document.getElementById("importer-options").addEventListener("click", importerOp
   if (!l) return;
   if (url) l.href = url;
   else l.style.display = "none";
+})();
+// mot de l'auteur et don : réglés dans auteur.json et mot-auteur.md (à côté de la page) ; absents ou vides : cachés
+(async () => {
+  const lire = async (f, json) => {
+    try {
+      const r = await fetch(f, { cache: "no-cache" });
+      if (!r.ok) return null;
+      return json ? await r.json() : await r.text();
+    } catch {
+      return null;
+    }
+  };
+  const conf = (await lire("auteur.json", true)) || {};
+  const mot = String((await lire("mot-auteur.md")) || "").trim();
+  const bloc = document.getElementById("auteur-liens"),
+    bMot = document.getElementById("mot-auteur"),
+    don = document.getElementById("don"),
+    cafe = document.getElementById("don-cafe"),
+    bulle = document.getElementById("don-bulle");
+  if (!bloc) return;
+  const github = conf.github || lienRetours().replace(/\/issues$/, "");
+  const urlDon = /^https:\/\//.test(conf.don || "") ? conf.don : "";
+  if (urlDon && don) {
+    // (1er clic sur le café : la bulle ; 2e clic, ou clic sur la bulle : Ko-fi ; clic ailleurs : la bulle se ferme)
+    bulle.href = urlDon;
+    bulle.textContent = conf.don_texte || "Faire un don ☕";
+    don.style.display = "";
+    cafe.addEventListener("click", e => {
+      e.stopPropagation();
+      if (don.classList.contains("ouvert")) {
+        window.open(urlDon, "_blank", "noopener");
+        don.classList.remove("ouvert");
+      } else don.classList.add("ouvert");
+    });
+    bulle.addEventListener("click", () => don.classList.remove("ouvert"));
+    document.addEventListener("click", e => {
+      if (!don.contains(e.target)) don.classList.remove("ouvert");
+    });
+  }
+  if (mot) {
+    // (Markdown simple : titres, gras, italique, liens, listes, paragraphes)
+    const esc = t => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    const enLigne = t =>
+      esc(t)
+        .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
+        .replace(/\*(.+?)\*/g, "<i>$1</i>")
+        .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    const html = mot
+      .split(/\n\s*\n/)
+      .map(p => {
+        const l = p.split("\n");
+        if (/^###\s/.test(p)) return "<h3>" + enLigne(p.replace(/^###\s+/, "")) + "</h3>";
+        if (/^##?\s/.test(p)) return "<h2>" + enLigne(p.replace(/^##?\s+/, "")) + "</h2>";
+        if (l.every(x => /^\s*[-*]\s/.test(x)))
+          return "<ul>" + l.map(x => "<li>" + enLigne(x.replace(/^\s*[-*]\s+/, "")) + "</li>").join("") + "</ul>";
+        return "<p>" + l.map(enLigne).join("<br>") + "</p>";
+      })
+      .join("");
+    bMot.style.display = "";
+    bloc.style.display = "";
+    bMot.addEventListener("click", () => {
+      const corps = h("div", { class: "mot-auteur" });
+      corps.innerHTML = html;
+      ouvrirModale("Mot de l'auteur", corps, [
+        github
+          ? h("button", { class: "btn", onclick: () => window.open(github, "_blank", "noopener") }, "Voir le projet sur GitHub")
+          : null,
+        urlDon ? h("button", { class: "btn", onclick: () => window.open(urlDon, "_blank", "noopener") }, "☕ Faire un don") : null,
+        h("button", { class: "btn principal", onclick: fermerModale }, "Fermer"),
+      ]);
+    });
+  }
 })();
 if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js").catch(() => {});
 (async () => {

@@ -49,3 +49,14 @@ PDF » pour un PDF).
 
 Licence : voir LICENCE.txt (gratuit, utilisable pour votre activité professionnelle ; le logiciel lui-même ne
 peut être ni vendu, ni loué, ni inclus dans une offre payante).
+
+Mot de l'auteur et don : le texte du bouton « Mot de l'auteur » est dans mot-auteur.md (Markdown simple :
+titres #, **gras**, *italique*, [liens](https://…), listes -) ; l'adresse du bouton de don (Ko-fi) et celle du
+dépôt GitHub sont dans auteur.json. Fichier vide ou adresse vide : le bouton n'apparaît pas.
+
+Rappel d'enregistrement : quand vos plans ont changé depuis leur dernier enregistrement en fichier, depuis plus de
+15 minutes, « ⚠ Plans à enregistrer » apparaît à côté de « + Nouveau plan » (en dessinant : un « ! » rouge sur la disquette) ; un clic pour
+enregistrer, remettre à plus tard, ou régler le délai (10, 15, 30 min, 1 h, jamais).
+
+Installer comme une application (icône sur l'écran d'accueil, plein écran, hors connexion) : bouton « 📲 Installer
+l'application » de la colonne bleue (Android, Chrome, Edge ; sur iPhone : Partager > Sur l'écran d'accueil).

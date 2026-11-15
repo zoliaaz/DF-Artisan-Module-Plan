@@ -1254,12 +1254,16 @@ tbody tr.a-deplacer > td { background: #fef3c7 !important; opacity: .8; }
 .et-module, .et-libre { position: absolute; top: 0; padding: 0; margin: 0; border: 0; background: none; cursor: pointer; line-height: 0; }
 .et-module svg { display: block; }
 .et-module.choisi { outline: 3px solid #2563eb; outline-offset: -1px; z-index: 1; }
+.et-invisible .et-bande { opacity: .5; outline: 2px dashed #94a3b8; outline-offset: 2px; }
+.et-module.invisible { opacity: .45; background: repeating-linear-gradient(45deg, transparent 0 6px, #94a3b833 6px 9px); }
 .et-module:hover:not(.choisi) { outline: 2px solid #93c5fd; outline-offset: -1px; }
 .et-libre { color: #94a3b8; font-size: 18px; line-height: 1; border: 1px dashed #cbd5e1; }
 .et-libre:hover { color: #2563eb; border-color: #2563eb; background: rgba(37, 99, 235, .06); }
 .et-pictos { display: grid; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); gap: 3px; }
 .et-picto { height: 34px; border: 1px solid var(--bord); border-radius: 6px; background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #111; }
 .et-picto.choisi { border-color: #2563eb; box-shadow: 0 0 0 2px #2563eb inset; }
+/* (survol : l'infobulle du bouton, aussi sur le dessin — Firefox ne la montre pas au-dessus d'un SVG) */
+.et-picto svg, .et-picto * { pointer-events: none; }
 .et-apercu { background: #e2e8f0; padding: 10px; border-radius: 6px; overflow-x: auto; }
 .et-apercu svg { display: block; }
 .et-zone { display: grid; grid-template-columns: 210px 60px 70px 62px 22px 22px 32px 84px 160px 160px 34px auto; gap: 4px; align-items: center; font-size: 12px; }

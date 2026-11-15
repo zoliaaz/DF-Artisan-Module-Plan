@@ -1867,6 +1867,19 @@ function lienRetours() {
     depot = premier && !premier.includes(".") ? premier : m[1] + ".github.io";
   return "https://github.com/" + m[1] + "/" + depot + "/issues";
 }
+/** version en ligne : ⚠ quand les plans ont changé depuis leur dernier enregistrement en fichier (affiché par
+ *  plans-web/autonome.js, classe « a-sauver » du corps de la page) ; un clic : enregistrer, ou régler le rappel */
+function boutonAlerteSauvegarde() {
+  return h(
+    "button",
+    {
+      class: "btn alerte-sauvegarde",
+      title: "Plans modifiés depuis leur dernier enregistrement en fichier",
+      onclick: () => typeof window.alerteSauvegarde === "function" && window.alerteSauvegarde(),
+    },
+    "⚠ Plans à enregistrer"
+  );
+}
 async function sectionPlans(zone, arg) {
   if (arg && arg.id) return ouvrirPlan(zone, arg.id, arg);
   const liste = await api("GET", "/api/plans?genre=plan" + (arg && arg.client_id ? "&client_id=" + arg.client_id : ""));
@@ -1877,7 +1890,7 @@ async function sectionPlans(zone, arg) {
       h("span", {}, "Plans électriques ", h("span", { class: "puce-beta" }, "BÊTA")),
       h("button", { class: "btn principal", onclick: () => nouveauPlan({}, !PLANS_AUTONOMES).catch(erreur) }, "+ Nouveau plan"),
       ...(PLANS_AUTONOMES
-        ? []
+        ? [boutonAlerteSauvegarde()]
         : [
             h(
               "button",
@@ -1967,7 +1980,7 @@ async function sectionPlans(zone, arg) {
                             {
                               class: "btn petit",
                               style: "margin-left:4px",
-                              title: "Étiquettes de tableau (module maison, alpha) d'après les circuits du plan",
+                              title: "Étiquettes de tableau (module maison, bêta) d'après les circuits du plan",
                               onclick: e => {
                                 e.stopPropagation();
                                 aller("plans", { id: p.id, etiquettes: true });
@@ -2543,7 +2556,7 @@ async function ouvrirPlan(zone, id, arg) {
           h(
             "button",
             {
-              class: "btn fichiers-autonome",
+              class: "btn fichiers-autonome disquette",
               title: "Enregistrer mes plans dans un fichier",
               onclick: () => typeof window.exporterPlans === "function" && window.exporterPlans().catch(erreur),
             },
@@ -10803,6 +10816,8 @@ async function ouvrirPlan(zone, id, arg) {
         sec,
         pieces,
         icone: picto ? picto[1] : null,
+        // (circuit mixte, prises et éclairage : son type de circuit est le nom écrit dans le plan)
+        mixte: !pictos && nbLum > 0 && nbPc > 0,
         modtype: picto ? picto[2] : "",
         typeA: !!(picto && TYPE_A_TQ.test(picto[1])),
         irve: !!(picto && picto[1] === IRVE_TQ),
@@ -11020,9 +11035,9 @@ async function ouvrirPlan(zone, id, arg) {
           return {
             genre: "disj",
             rep,
-            texte: type || nomC,
-            texte_auto: type ? true : "",
-            desc: pieces || (type && nomC !== type ? nomC : ""),
+            texte: x.mixte && x.circuit ? x.circuit : type || nomC,
+            texte_auto: type && !(x.mixte && x.circuit) ? true : "",
+            desc: pieces || (type && nomC !== type && !(x.mixte && x.circuit) ? nomC : ""),
             calibre: x.cal + " A",
             courbe: "C",
             poles: "1P+N",
