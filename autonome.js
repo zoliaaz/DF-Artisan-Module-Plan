@@ -553,7 +553,6 @@ document.getElementById("importer-options").addEventListener("click", importerOp
       })
       .join("");
     bMot.style.display = "";
-    bloc.style.display = "";
     bMot.addEventListener("click", () => {
       const corps = h("div", { class: "mot-auteur" });
       corps.innerHTML = html;

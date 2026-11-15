@@ -4094,7 +4094,7 @@ async function ouvrirPlan(zone, id, arg) {
               ? "Main levée, symboles : dessinez un symbole électrique (DCL, interrupteur, prise…) : il est reconnu et remplacé — les autres possibilités s'affichent dans une barre ; un trait d'un appareil à un autre : liaison · H : mode suivant · ↶ (Ctrl+Z) pour annuler · Échap ou clic droit : sélection"
               : "Main levée, murs : dessinez le tour d'une pièce d'un seul trait : murs droits (carré, rectangle, pièce en L…) ; trait non fermé : murs ; quart de cercle (avec ou sans battant) contre un mur : porte · H : mode suivant · ↶ (Ctrl+Z) pour annuler · Échap ou clic droit : sélection",
       gomme:
-        "Gomme : appuyez sur un mur et glissez le long de lui : au milieu du mur, le morceau devient un passage (les pièces restent séparées) ; jusqu'au bout du mur, le mur est raccourci · la longueur s'affiche pendant le geste · ↶ (Ctrl+Z) pour annuler · Échap ou clic droit : sélection",
+        "Gomme : appuyez sur un mur et glissez le long de lui : au milieu du mur, le morceau devient un passage (les pièces restent séparées) ; jusqu'au bout du mur, le mur est raccourci · sur une note à main levée : glissez, chaque note touchée s'efface · la longueur s'affiche pendant le geste · ↶ (Ctrl+Z) pour annuler · Échap ou clic droit : sélection",
       porte:
         "Clic sur un mur : poser une porte (ou une ouverture libre, sans porte : 2e appui sur le bouton Porte) (réglez ensuite largeur, sens et charnières à droite) · Échap ou clic droit : sélection",
       roue: "Roue des symboles : clic là où poser l'appareil, puis choix dans la roue (Commande, Lumière… : survol pour les autres) · reste dans l'outil pour le suivant · Échap ou clic droit : sélection",
@@ -4157,6 +4157,7 @@ async function ouvrirPlan(zone, id, arg) {
       ["cercle", "◯", "Cercle (tirer d'un coin à l'autre)"],
       ["rect", "▭", "Rectangle"],
       ["fleche", "➝", "Flèche (de la queue à la pointe)"],
+      ["gomme", "⌫", "Gomme : glissez sur les notes à effacer"],
     ];
     if (vis)
       paletteNotes.replaceChildren(
@@ -8716,10 +8717,17 @@ async function ouvrirPlan(zone, id, arg) {
       dessiner();
       return;
     }
+    // gomme des notes à main levée (outil gomme sur une note, ou ⌫ des notes) : chaque note touchée en glissant s'efface
+    if ((o === "gomme" && noteSous(pt).length) || (o === "main" && etat.modeMain === "notes" && etat.formeNote === "gomme")) {
+      geste = { genre: "gommeNotes", n: gommerNotes(pt) };
+      dessiner();
+      return;
+    }
     if (o === "gomme") {
       const mp = murProche(pt, Math.max(d.epaisseur, 24 / etat.vue.z));
       if (!mp) {
-        toast("Appuyez sur un mur, puis glissez le long de lui.", true);
+        // (à côté des murs : la gomme balaie les notes à main levée qu'elle croise)
+        geste = { genre: "gommeNotes", n: 0 };
         return;
       }
       etat.gomme = { m: mp.m, t0: mp.t, t1: mp.t };
@@ -8987,6 +8995,11 @@ async function ouvrirPlan(zone, id, arg) {
     etat.apercu = {};
     if (geste && geste.genre === "cadrage" && etat.cadrage) {
       etat.cadrage.b = pt;
+      dessiner();
+      return;
+    }
+    if (geste && geste.genre === "gommeNotes") {
+      geste.n += gommerNotes(pt);
       dessiner();
       return;
     }
@@ -9549,6 +9562,9 @@ async function ouvrirPlan(zone, id, arg) {
         toast("Glissez d'un coin à l'autre du plan.", true);
         lancerDetection(c ? c.sens : 1);
       }
+    } else if (geste.genre === "gommeNotes") {
+      if (geste.n) valider();
+      else dessiner();
     } else if (geste.genre === "gomme") {
       const g = etat.gomme;
       etat.gomme = null;
@@ -10629,6 +10645,24 @@ async function ouvrirPlan(zone, id, arg) {
     creerContour(coins, ferme, sansValider);
   }
   /** bornes du morceau gommé (fractions du mur) : longueurs calées sur la grille, collées au bout si on en est tout près */
+  /** note à main levée sous le point (à la distance d'un doigt) */
+  function noteSous(pt) {
+    const r = 12 / etat.vue.z;
+    const dS = (q, a, b) => {
+      const L2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2 || 1e-9,
+        t = Math.max(0, Math.min(1, ((q.x - a.x) * (b.x - a.x) + (q.y - a.y) * (b.y - a.y)) / L2));
+      return Math.hypot(q.x - a.x - t * (b.x - a.x), q.y - a.y - t * (b.y - a.y));
+    };
+    return (d.notes || []).filter(n => (n.pts || []).some((q, i, a) => i && dS(pt, a[i - 1], q) < r + (n.ep || 4) / 2));
+  }
+  /** gomme : efface les notes à main levée touchées ; renvoie leur nombre */
+  function gommerNotes(pt) {
+    const t = new Set(noteSous(pt).map(n => n.id));
+    if (!t.size) return 0;
+    d.notes = d.notes.filter(n => !t.has(n.id));
+    t.forEach(id => etat.sel.delete(id));
+    return t.size;
+  }
   function bornesGomme(m, t0, t1) {
     const L = dist(m.a, m.b) || 1;
     let s0 = grille(t0 * L),
