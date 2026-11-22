@@ -490,6 +490,7 @@ table.lignes.etude > thead th { position: sticky; top: var(--haut-entete, 0px); 
 .ligne-dossier { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: -2px 0 8px; }
 .ligne-dossier .numero-dossier { font-size: 15px; white-space: nowrap; }
 .ligne-dossier .infos-dossier { flex: 1; text-align: right; color: var(--discret); font-size: 12px; min-width: 200px; }
+.eclair-associes { display: inline-flex; align-items: center; color: var(--discret); cursor: help; margin-left: -2px; }
 table.lignes.etude > thead .poignee.a-gauche { right: auto; left: -5px; }
 table.lignes.etude > thead th.act { position: sticky; }
 /* défilement automatique du navigateur (curseur) : même zone visible que celle de BatiDevis, sous l'en-tête et les titres fixes */
@@ -515,7 +516,7 @@ body.gauche-repliee #mise-a-jour { display: none; }
 #mise-a-jour + .etat { margin-top: 0; }
 .reprises { display: grid; gap: 8px; }
 .reprises > div { display: flex; gap: 12px; align-items: center; }
-.reprises .btn { min-width: 130px; }
+.reprises .btn { min-width: 130px; flex-shrink: 0; white-space: nowrap; }
 table.taux-mo td input { width: 100%; }
 table.taux-mo td:nth-child(1) { width: 120px; } table.taux-mo td:nth-child(3) { width: 110px; }
 table.lignes.contacts > thead .poignee { position: absolute; top: 0; right: -4px; width: 9px; height: 100%; cursor: col-resize; z-index: 2;
@@ -1094,14 +1095,6 @@ body.gauche-repliee .pied-gauche { margin-top: 0; }
 .recherche-active [data-onglet]::before { content: attr(data-titre); display: block; font-weight: 700; color: var(--accent); border-bottom: 2px solid var(--accent); margin: 18px 0 6px; padding-bottom: 2px; }
 .recherche-active .trouve:not(.categorie) { background: #fff7cc; border-radius: 6px; box-shadow: 0 0 0 4px #fff7cc; }
 .recherche-active .sous-onglets button.actif { background: none; color: inherit; }
-/* tableaux électriques (Tiquettes dans un cadre) */
-.tableau-page { display: flex; flex-direction: column; max-width: none; padding-bottom: 8px; }
-.tableau-cadre { flex: 1; width: 100%; min-height: 600px; border: 1px solid var(--bord); border-radius: 8px; background: #fff; }
-.tableau-page .erreur { color: var(--danger); }
-/* barre du tableau sur une seule ligne : le client et le devis se raccourcissent (texte entier au survol) */
-.tableau-page > .entete-fiche { flex-wrap: nowrap; }
-.tableau-page > .entete-fiche > .sous { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tableau-page > .entete-fiche > input { min-width: 140px; }
 .armoires { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 0 0 8px; }
 .armoires .armoire { border: 1px solid var(--bord); background: #fff; border-radius: 8px 8px 0 0; padding: 5px 12px; cursor: pointer; font: inherit; font-weight: 600; }
 .armoires .armoire.actif { background: var(--accent, #2d4ea2); color: #fff; border-color: var(--accent, #2d4ea2); }
@@ -1245,7 +1238,9 @@ tbody tr.a-deplacer > td { background: #fef3c7 !important; opacity: .8; }
 .et-page > .entete-fiche > .sous { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .et-barre { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; margin: 4px 0 10px; }
 .et-corps { display: flex; gap: 14px; align-items: flex-start; }
-.et-gauche { flex: 1; min-width: 0; overflow-x: auto; padding-bottom: 6px; }
+.et-colonne { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+/* rangées : elles défilent dans leur cadre (hauteur de l'écran), barre horizontale toujours là */
+.et-gauche { min-width: 0; overflow-x: scroll; overflow-y: auto; padding-bottom: 6px; }
 .et-panneau { width: 340px; flex: none; background: var(--fond-carte, #fff); border: 1px solid var(--bord); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; position: sticky; top: 8px; }
 .et-panneau h4 { margin: 0; }
 .et-rangees { display: flex; flex-direction: column; gap: 14px; align-items: flex-start; }
@@ -1273,7 +1268,7 @@ tbody tr.a-deplacer > td { background: #fef3c7 !important; opacity: .8; }
 .et-panneau .champ { min-width: 0; }
 .et-panneau .champ input[type="text"] { width: 100%; min-width: 0; box-sizing: border-box; }
 .et-corps { position: relative; }
-.et-panneau.pres { position: absolute; z-index: 5; box-shadow: 0 8px 28px rgba(15, 23, 42, .25); max-height: 70vh; overflow: auto; }
+.et-panneau.pres { position: absolute; z-index: 5; box-shadow: 0 8px 28px rgba(15, 23, 42, .25); overflow: auto; box-sizing: border-box; }
 .et-panneau.cache { display: none; }
 .et-panneau-titre { display: flex; gap: 6px; align-items: center; }
 .et-panneau-titre h4 { flex: 1; }
@@ -1297,8 +1292,8 @@ tbody tr.a-deplacer > td { background: #fef3c7 !important; opacity: .8; }
 .et-impr-opts{display:flex;flex-wrap:wrap;gap:6px 16px;margin:-4px 0 4px 26px;align-items:center}
 .et-impr-sous{display:flex;gap:4px;align-items:center;cursor:pointer}
 /* module maison : panneau entièrement visible (défile s'il est plus haut que l'écran), barre du haut sur une ligne */
-.et-panneau:not(.pres) { box-sizing: border-box; }
-@media (pointer: coarse) { .et-panneau:not(.pres) { overflow-y: auto; } }
+.et-panneau:not(.pres) { box-sizing: border-box; overflow-y: auto; }
+
 /* panneau resserré : il tient entier à l'écran sur un PC */
 .et-panneau { width: 360px; gap: 5px; padding: 8px 10px; }
 .et-panneau .champ { gap: 2px; margin: 0; }
@@ -1325,3 +1320,68 @@ tbody tr.a-deplacer > td { background: #fef3c7 !important; opacity: .8; }
 .et-schema-cadre { max-height: calc(100vh - 190px); }
 .sch-cible { cursor: pointer; pointer-events: all; }
 .sch-cible:hover { fill: rgba(37, 99, 235, 0.12); }
+.et-synoptique-cadre .syn-cible { cursor: pointer; pointer-events: all; }
+.et-synoptique-cadre .syn-cible:hover { fill: rgba(37, 99, 235, 0.08); }
+
+/* imprimante dessinée devant le texte des boutons d'impression */
+.icone-imprimante { display: inline-flex; vertical-align: -3px; margin-right: 5px; }
+.icone-imprimante svg { display: block; }
+
+/* aperçu de l'import Excel (Paramètres > Général) */
+.table-import th,
+.table-import td {
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--bord, #ddd);
+}
+
+/* repères et calibres sous les étiquettes (option de l'éditeur, écran seulement) */
+.et-reperes { position: relative; height: 30px; margin-top: 2px; }
+.et-repere { position: absolute; top: 0; box-sizing: border-box; padding: 0 2px; text-align: center; font-size: 11px; line-height: 13px; overflow: hidden; white-space: nowrap; border-left: 1px solid #cbd5e1; color: var(--texte-doux, #475569); }
+.et-repere b { display: block; color: var(--texte, #0f172a); }
+.et-repere span { display: block; text-overflow: ellipsis; overflow: hidden; }
+
+/* tableaux d'une même installation, dans les affaires associées et la fiche client : liste dépliable */
+.groupe-tableaux summary { cursor: pointer; }
+.groupe-tableaux ul { margin: 4px 0 0; padding-left: 18px; font-weight: normal; }
+.groupe-tableaux li { margin: 2px 0; }
+.et-gauche::-webkit-scrollbar { height: 12px; width: 0; } /* (verticale masquée : la molette fait défiler) */
+.et-gauche::-webkit-scrollbar-track { background: #e2e8f0; border-radius: 6px; }
+.et-gauche::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 6px; }
+.et-gauche::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+/* vue « Étiquettes » d'un tableau : la page ne défile pas, les rangées défilent dans leur cadre qui remplit l'écran
+   (barre horizontale toujours en bas de l'écran) ; le panneau défile en lui-même */
+.fiche.et-page.et-vue-etiquettes { display: flex; flex-direction: column; overflow: hidden; padding-bottom: 8px; }
+.et-vue-etiquettes > .entete-fiche, .et-vue-etiquettes > .et-ligne-haut, .et-vue-etiquettes > *:not(.et-corps) { flex: none; }
+.et-vue-etiquettes > .et-corps { flex: 1 1 auto; min-height: 0; align-items: stretch; }
+.et-vue-etiquettes .et-colonne { min-height: 0; }
+.et-vue-etiquettes .et-gauche { flex: 1 1 auto; min-height: 0; height: auto; }
+.et-vue-etiquettes .et-panneau:not(.pres) { align-self: flex-start; max-height: 100%; position: static; }
+.et-actions-armoires { display: inline-flex; gap: 6px; align-items: center; }
+.et-nomen-vide td { background: repeating-linear-gradient(45deg, transparent 0 6px, #94a3b81f 6px 9px); color: #64748b; }
+/* vue « Nomenclature » : la page ne défile pas, le tableau défile dans son cadre qui remplit l'écran (barre horizontale
+   toujours en bas de l'écran, titres des colonnes collés en haut) */
+.fiche.et-page.et-vue-nomenclature { display: flex; flex-direction: column; overflow: hidden; padding-bottom: 8px; }
+.et-vue-nomenclature > *:not(.et-schema) { flex: none; }
+.et-vue-nomenclature > .et-schema { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.et-vue-nomenclature .et-schema > * { flex: none; }
+.et-vue-nomenclature .et-schema > .et-nomenclature-cadre { flex: 1 1 auto; min-height: 0; overflow-x: scroll; overflow-y: auto; }
+.et-vue-nomenclature .et-nomenclature-cadre thead th { position: sticky; top: 0; z-index: 1; background: var(--fond-carte, #fff); }
+.et-vue-nomenclature .et-nomenclature-cadre::-webkit-scrollbar { height: 12px; width: 0; }
+.et-vue-nomenclature .et-nomenclature-cadre::-webkit-scrollbar-track { background: #e2e8f0; border-radius: 6px; }
+.et-vue-nomenclature .et-nomenclature-cadre::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 6px; }
+/* panneau d'une étiquette dans une fenêtre (depuis la nomenclature) : sans cadre ni hauteur propre */
+.modale-boite .et-panneau { width: auto; max-height: none !important; overflow: visible; border: 0; padding: 0; position: static; box-shadow: none; }
+
+/* bulle « Style » de l'annotation d'une étiquette */
+.et-bulle-annot { position: fixed; z-index: 3000; background: var(--panneau); border: 1px solid var(--bord); border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.18); padding: 10px; display: flex; flex-direction: column; gap: 8px; min-width: 170px; }
+
+/* devis, onglet Achats : matériel à commander, lignes serrées */
+table.resultats.achats-materiel td { padding: 2px 8px; }
+table.resultats.achats-materiel td input { padding: 2px 6px; height: auto; min-height: 0; }
+
+/* aide du plan : lignes écartées par la recherche */
+.aide-plan-zone .cache-aide { display: none; }
+.palette-couleurs { position: fixed; z-index: 3000; background: var(--panneau); border: 1px solid var(--bord); border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.18); padding: 10px; }

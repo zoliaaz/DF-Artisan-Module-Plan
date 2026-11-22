@@ -724,10 +724,7 @@ function appliquerAffichage() {
 /** module « Électricien » (Paramètres > Général) : plans et/ou étude d'éclairement, ouverts par l'éclair à côté du nom */
 function majModuleElectricien(G) {
   G = G || PARAMS.general || {};
-  document.body.classList.toggle(
-    "avec-electricien",
-    !!(G.module_electricien || G.module_eclairage || G.module_tableaux || G.module_etiquettes)
-  );
+  document.body.classList.toggle("avec-electricien", !!(G.module_electricien || G.module_eclairage || G.module_etiquettes));
   document.body.classList.toggle("avec-plans", !!G.module_electricien);
   // éclair jaune, sauf si la couleur de la colonne est déjà proche du jaune : alors blanc ou foncé selon sa clarté
   const b = document.getElementById("bouton-electricien");
@@ -745,8 +742,9 @@ const ICONES_ELEC = {
     '<svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M2.5 2.5h15v15h-15z"/><path d="M2.5 9.5h7v8M9.5 2.5v4M13 9.5h4.5"/></svg>',
   tableaux:
     '<svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="5" y="1.5" width="10" height="17" rx="1.5"/><rect x="7.5" y="6" width="5" height="8" rx="1" fill="currentColor"/><path d="M10 1.5v-0M10 18.5v0"/></svg>',
+  // (tableau électrique : un coffret, deux rangées de modules)
   etiquettes:
-    '<svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="1.5" y="5" width="17" height="10" rx="1"/><path d="M6 5v10M10 5v10M14 5v10"/></svg>',
+    '<svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="1.8" y="1.8" width="16.4" height="16.4" rx="2"/><path d="M4.5 5.5h11v3.5h-11zM4.5 11h11v3.5h-11z" stroke-width="1.2"/><path d="M8.2 5.5v3.5M11.8 5.5v3.5M8.2 11v3.5M11.8 11v3.5" stroke-width="1.1"/></svg>',
   eclairage:
     '<svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 1.8a5.6 5.6 0 0 0-3.3 10.1c.7.5 1.1 1.3 1.1 2.1v.6h4.4V14c0-.8.4-1.6 1.1-2.1A5.6 5.6 0 0 0 10 1.8z"/><path d="M8 17h4M8.7 19h2.6"/></svg>',
 };
@@ -761,16 +759,13 @@ function entreesElectricien(G) {
   G = G || PARAMS.general || {};
   return [
     G.module_electricien ? ["plans", "Plans d'implantation", "Plans", () => nouveauPlan({}).catch(erreur), "Nouveau plan"] : null,
-    G.module_tableaux
-      ? ["tableaux", "Tableaux électriques", "Tableaux", () => nouveauTableau({}, true).catch(erreur), "Nouveau tableau électrique"]
-      : null,
     G.module_etiquettes
       ? [
           "etiquettes",
-          "Tableaux (module maison, bêta)",
-          "Tableaux maison",
+          "Tableaux électriques (bêta)",
+          "Tableaux",
           () => nouvellesEtiquettes({}, true).catch(erreur),
-          "Nouvelles étiquettes de tableau",
+          "Nouveau tableau électrique",
         ]
       : null,
     G.module_eclairage
@@ -1485,3 +1480,20 @@ function boutonDocumentLibreFiche() {
     })
     .catch(() => {});
 })();
+
+/** imprimante dessinée (à la place de l'émoji 🖨, peu lisible), devant le texte d'un bouton d'impression */
+const SVG_IMPRIMANTE =
+  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M7 9V3h10v6"/><rect x="3" y="9" width="18" height="8" rx="1.5"/><path d="M7 14h10v7H7z" fill="#fff"/><path d="M9.5 17h5M9.5 19h3.5"/><circle cx="17.5" cy="11.8" r=".9" fill="currentColor" stroke="none"/></svg>';
+// petite étiquette des documents repris d'un autre logiciel (Batifree, import Excel)
+function tagOrigine(d) {
+  if (d.origine === "batifree") return h("span", { class: "tag-batifree", title: "Repris de Batifree : erreurs possibles" }, "Batifree");
+  if (d.origine === "import") return h("span", { class: "tag-batifree", title: "Importé depuis un classeur Excel" }, "Importé");
+  return null;
+}
+
+function iconeImprimante() {
+  const s = document.createElement("span");
+  s.className = "icone-imprimante";
+  s.innerHTML = SVG_IMPRIMANTE;
+  return s;
+}

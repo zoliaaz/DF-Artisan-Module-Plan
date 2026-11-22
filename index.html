@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DF Artisan - Plan électrique</title>
 <meta name="description" content="Plans d'implantation électrique en 2D : murs, portes, fenêtres, appareillage NF C 15-100, liaisons, circuits. Gratuit, sans installation, hors connexion.">
 <meta name="theme-color" content="#2d4ea2">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="256x256" href="icone.png">
 <link rel="apple-touch-icon" href="icone-192.png">
 <link rel="stylesheet" href="style.css?v=0.63.24">
+<link rel="stylesheet" href="style.css?v=0.68.31">
 <style>
   /* version autonome : seulement les plans */
   .barre-gauche #nav .nav-ligne:not(.autonome), #mise-a-jour, #profil, #bouton-reseau, #quitter, #bouton-electricien { display: none !important; }
@@ -43,12 +43,21 @@
   #contenu .entete-liste { padding-right: 46px !important; }
   .nav-fichiers .nav-reseau, .nav-fichiers .replier-gauche { margin: 0; }
   body.gauche-repliee #auteur-liens { display: none !important; }
+  /* nouveautés (bas de la colonne bleue) ; point orange : pas encore vues */
+  .nouveautes { background: none; border: 0; color: inherit; padding: 6px 10px; border-radius: 6px; cursor: pointer; font: inherit; text-align: left; width: 100%; }
+  .nouveautes:hover { background: rgba(255,255,255,.12); }
+  .nouveautes.non-vu::after { content: ""; display: inline-block; width: 8px; height: 8px; margin-left: 6px; border-radius: 50%; background: #f59e0b; vertical-align: middle; }
+  body.gauche-repliee .nouveautes { display: none; }
+  .barre-gauche > .pied-gauche { margin-top: auto; padding-bottom: 8px; }
+  .nouveautes-liste h2 { font-size: 16px; } .nouveautes-liste h3 { font-size: 14px; margin: .7em 0 .2em; } .nouveautes-liste ul { margin: 0 0 .5em; padding-left: 1.2em; }
+  /* nouvelle version en ligne : bandeau en haut, au milieu */
+  .bandeau-maj { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 950; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: #fff7ed; border: 1px solid #f59e0b; color: #7c2d12; padding: 8px 12px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,.2); max-width: calc(100vw - 24px); font-size: 14px; }
+  .bandeau-maj.cache { display: none; }
   .mot-auteur { max-width: 620px; line-height: 1.5; } .mot-auteur h2, .mot-auteur h3 { margin: .6em 0 .3em; }
 </style>
 </head>
 <body>
 <aside class="barre-gauche">
-  <div class="marque"><button id="bouton-menu" class="bouton-menu" title="Afficher le menu">☰</button><span class="nom-logiciel">DF Artisan - Plans</span><button id="bouton-electricien" class="bouton-electricien"></button></div>
   <nav id="nav">
     <div class="nav-ligne autonome"><button data-section="plans" class="actif">Mes plans</button><button class="nav-plus" id="nouveau-plan" title="Nouveau plan">+</button></div>
   </nav>
@@ -65,24 +74,25 @@
   <div id="mise-a-jour"></div>
   <div id="etat-enregistrement" class="etat"></div>
   <div id="profil"></div>
-  <div class="apropos-autonome">Vos plans restent dans ce navigateur, sur cet appareil : enregistrez-les de temps en temps en fichier.<br>Module de plans issu de <b>DF artisan</b>, logiciel de devis et factures spécialisé dans le bâtiment, <b>en cours de développement</b> : il peut comporter des erreurs.<a id="lien-retours" href="#" target="_blank" rel="noopener" style="color:inherit;display:block;margin:4px 0">Signaler un bug, proposer une idée (GitHub)</a><div style="margin-top:4px">Gratuit, utilisable pour votre activité professionnelle ; le module lui-même ne peut pas être vendu, ni proposé en service en ligne payant (voir LICENCE.txt). Version 0.63.24.</div></div>
+  <div class="apropos-autonome">Vos plans restent dans ce navigateur, sur cet appareil : enregistrez-les de temps en temps en fichier.<br>Module de plans issu de <b>DF artisan</b>, logiciel de devis et factures spécialisé dans le bâtiment, <b>en cours de développement</b> : il peut comporter des erreurs.<a id="lien-retours" href="#" target="_blank" rel="noopener" style="color:inherit;display:block;margin:4px 0">Signaler un bug, proposer une idée (GitHub)</a><div style="margin-top:4px">Gratuit, utilisable pour votre activité professionnelle ; le module lui-même ne peut pas être vendu, ni proposé en service en ligne payant (voir LICENCE.txt). Version 0.68.31.</div></div>
   <div class="nav-fichiers" id="auteur-liens" style="display:none">
   </div>
   <button id="bouton-reseau" class="nav-reseau cache"><span class="reseau-icone"></span><span class="reseau-texte"></span></button>
-  <div class="pied-gauche"><button id="quitter" class="replier-gauche"></button></div>
+  <div class="pied-gauche"><button id="nouveautes" class="nouveautes" title="Correctifs, ajouts et modifications des dernières versions">📋 Nouveautés</button><button id="quitter" class="replier-gauche"></button></div>
 </aside>
 <main id="contenu"></main>
 <div id="don" class="don" style="display:none"><button id="don-cafe" class="don-cafe" title="Soutenir le projet">☕</button><a id="don-bulle" class="don-bulle" target="_blank" rel="noopener"></a></div>
 <div id="modale" class="modale cache"><div class="modale-boite" id="modale-boite"></div></div>
 <div id="toast" class="toast cache"></div>
+<script>window.VERSION_PLANS = "0.68.31";</script>
 <script src="sans-serveur.js"></script>
-<script src="riche.js?v=0.63.24"></script>
-<script src="js/base.js?v=0.63.24"></script>
-<script src="js/listes.js?v=0.63.24"></script>
-<script src="js/devis.js?v=0.63.24"></script>
-<script src="js/etude_clavier.js?v=0.63.24"></script>
-<script src="js/plan.js?v=0.63.24"></script>
-<script src="js/plan_photo.js?v=0.63.24"></script>
-<script src="autonome.js?v=0.63.24"></script>
+<script src="riche.js?v=0.68.31"></script>
+<script src="js/base.js?v=0.68.31"></script>
+<script src="js/listes.js?v=0.68.31"></script>
+<script src="js/devis.js?v=0.68.31"></script>
+<script src="js/etude_clavier.js?v=0.68.31"></script>
+<script src="js/plan.js?v=0.68.31"></script>
+<script src="js/plan_photo.js?v=0.68.31"></script>
+<script src="autonome.js?v=0.68.31"></script>
 </body>
 </html>

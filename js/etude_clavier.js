@@ -95,7 +95,7 @@ function fenetreRaccourcis() {
       )
     ),
     [
-      h("button", { class: "btn", onclick: imprimerRaccourcis }, "🖨 Imprimer la liste"),
+      h("button", { class: "btn", onclick: imprimerRaccourcis }, iconeImprimante(), "Imprimer la liste"),
       h("button", { class: "btn principal", onclick: fermerModale }, "Fermer"),
     ],
     { largeur: "min(620px, 94vw)" }

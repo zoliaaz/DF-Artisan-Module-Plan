@@ -58,5 +58,9 @@ Rappel d'enregistrement : quand vos plans ont changé depuis leur dernier enregi
 15 minutes, « ⚠ Plans à enregistrer » apparaît à côté de « + Nouveau plan » (en dessinant : un « ! » rouge sur la disquette) ; un clic pour
 enregistrer, remettre à plus tard, ou régler le délai (10, 15, 30 min, 1 h, jamais).
 
+Nouvelle version : quand la page en ligne a changé, un bandeau « Une nouvelle version des plans est disponible »
+apparaît en haut ; « Recharger la page » la prend, vos plans et vos options sont gardés. « 📋 Nouveautés » (bas de la
+colonne bleue) : correctifs, ajouts et modifications des dernières versions (fichier nouveautes.md).
+
 Installer comme une application (icône sur l'écran d'accueil, plein écran, hors connexion) : bouton « 📲 Installer
 l'application » de la colonne bleue (Android, Chrome, Edge ; sur iPhone : Partager > Sur l'écran d'accueil).

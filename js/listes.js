@@ -531,14 +531,7 @@ async function afficherTableauDevis(fiche) {
       {
         cle: "numero",
         titre: "N°",
-        val: d =>
-          ajouterA(
-            h("span"),
-            h("b", {}, d.numero),
-            d.origine === "batifree"
-              ? h("span", { class: "tag-batifree", title: "Repris de Batifree : erreurs possibles" }, "Batifree")
-              : null
-          ),
+        val: d => ajouterA(h("span"), h("b", {}, d.numero), tagOrigine(d)),
         decroissant: true,
       },
       {
@@ -1182,6 +1175,9 @@ async function enregistrerDevis(options) {
     interlocuteur: d.interlocuteur || "",
     champs_libres: d.champs_libres || {},
     temps_passe: d.temps_passe ?? null,
+    temps_devis: d.temps_devis ?? null,
+    trajets: d.trajets ?? null,
+    trajet_duree: d.trajet_duree ?? null,
     postes: d.postes || [],
     ...(estFact(d)
       ? { date_echeance: d.date_echeance || "", date_travaux: d.date_travaux || "", nature_operation: d.nature_operation || "" }
@@ -1211,7 +1207,7 @@ async function enregistrerDevis(options) {
   if (estFact(d)) delete corps.statut; // (l'état d'une facture change seulement en la validant)
   if (DV.factureEmise)
     Object.keys(corps).forEach(k => {
-      if (!["lignes", "temps_passe"].includes(k)) delete corps[k];
+      if (!["lignes", "temps_passe", "temps_devis", "trajets", "trajet_duree"].includes(k)) delete corps[k];
     });
   corps._modifie_le = d.modifie_le || null; // (refusé si enregistré entre-temps dans un autre onglet)
   DV.sale = false;

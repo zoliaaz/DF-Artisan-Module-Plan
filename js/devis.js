@@ -191,7 +191,16 @@ function dessinerDevis(fiche) {
           },
           estFact(d) ? "⚠ Reprise de Batifree" : "⚠ Repris de Batifree"
         )
-      : null,
+      : d.origine === "import"
+        ? h(
+            "span",
+            {
+              class: "puce origine-batifree",
+              title: "Importé depuis un classeur Excel (autre logiciel) : vérifiez-le avant de vous en resservir.",
+            },
+            "⚠ Importé"
+          )
+        : null,
     F
       ? h(
           "span",
@@ -278,53 +287,6 @@ function dessinerDevis(fiche) {
           },
           "📄 Document…"
         )
-      : null,
-    // (bouton « Plan » seulement si un plan est rattaché à ce devis : un plan se crée depuis Plans ou la fiche client)
-    // (facture : les plans de son devis d'origine)
-    ((PARAMS.general || {}).module_electricien ||
-      (PARAMS.general || {}).module_eclairage ||
-      (PARAMS.general || {}).module_tableaux ||
-      (PARAMS.general || {}).module_etiquettes) &&
-      (F ? d.type === "facture" && d.origine_id : d.id)
-      ? (() => {
-          const dvId = F ? d.origine_id : d.id;
-          const b = h(
-            "button",
-            {
-              class: "btn cache",
-              title: F
-                ? "Plans, études d'éclairement et tableaux du devis de cette facture"
-                : "Plans, études d'éclairement et tableaux de ce devis (module Électricien)",
-              onclick: e => menuPlansDevis(e.currentTarget, F ? { id: dvId, sansNouveau: true } : d).catch(erreur),
-            },
-            "Plan"
-          );
-          api("GET", "/api/plans?document_id=" + dvId)
-            .then(l => {
-              if (!l.length) return;
-              const n = g => l.filter(x => (x.genre || "plan") === g).length,
-                np = n("plan"),
-                ne = n("eclairage"),
-                nt = n("tableau");
-              b.classList.remove("cache");
-              b.textContent =
-                np === l.length
-                  ? np > 1
-                    ? "Plans (" + np + ")"
-                    : "Plan"
-                  : ne === l.length
-                    ? ne > 1
-                      ? "Éclairage (" + ne + ")"
-                      : "Éclairage"
-                    : nt === l.length
-                      ? nt > 1
-                        ? "Tableaux (" + nt + ")"
-                        : "Tableau"
-                      : "Électricien (" + l.length + ")";
-            })
-            .catch(() => {});
-          return b;
-        })()
       : null,
     F && d.emise_le ? null : h("button", { class: "btn danger", onclick: () => supprimerDevis(fiche).catch(erreur) }, "Supprimer"),
     DV.zones.barre
@@ -871,6 +833,31 @@ function construireZoneDevis() {
     { class: "btn petit toujours-actif", type: "button", onclick: () => fenetreAffaire(d).catch(erreur) },
     "Affaires associées…"
   );
+  // (petit éclair à côté, dans le ton du texte : un plan, une étude d'éclairement ou un tableau est rattaché au devis)
+  const eclairAssocies = h("span", { class: "eclair-associes", style: "display:none" });
+  eclairAssocies.innerHTML =
+    '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M13.5 2 4.5 13.5h6L9.5 22l9-12h-6z" fill="currentColor"/></svg>';
+  {
+    const G = PARAMS.general || {},
+      dvId = estFact(d) ? d.origine_id : d.id;
+    if (dvId && (G.module_electricien || G.module_eclairage || G.module_etiquettes))
+      api("GET", "/api/plans?document_id=" + dvId)
+        .then(l => {
+          if (!l.length) return;
+          const n = g => l.filter(x => (x.genre || "plan") === g).length;
+          const t = [
+            [n("plan"), "un plan", "plans"],
+            [n("eclairage"), "une étude d'éclairement", "études d'éclairement"],
+            [n("etiquettes"), "un tableau électrique", "tableaux électriques"],
+          ]
+            .filter(([k]) => k)
+            .map(([k, un, plus]) => (k > 1 ? k + " " + plus : un));
+          eclairAssocies.title =
+            "Contient " + (t.length > 1 ? t.slice(0, -1).join(", ") + " et " + t[t.length - 1] : t[0]) + " (Affaires associées…)";
+          eclairAssocies.style.display = "";
+        })
+        .catch(() => {});
+  }
   const fmtDateHeure = v => (v ? dateFr(v) + (v.length > 10 ? " à " + v.slice(11, 16) : "") : "");
 
   const autoliq = h("input", { type: "checkbox", checked: !!d.autoliquidation });
@@ -893,7 +880,7 @@ function construireZoneDevis() {
   );
   // la case passe en orange tant qu'il y a des lignes à 10 % / 5,5 % sans la mention
   // facture : la case se coche toute seule (facture sans devis avec des lignes à 10 %) tant qu'on n'y a pas touché
-  const factAuto = d.type === "facture" && d.origine !== "batifree";
+  const factAuto = d.type === "facture" && d.origine !== "batifree" && d.origine !== "import";
   if (factAuto)
     caseTvaReduite.title =
       "Cochée toute seule pour une facture sans devis qui a des lignes à 10 % (le devis signé porte déjà la mention). Vous pouvez la cocher ou la décocher : elle ne change alors plus toute seule.";
@@ -987,6 +974,16 @@ function construireZoneDevis() {
           : "⚠ Devis repris de Batifree (ancien logiciel de facturation) : la reprise peut comporter des erreurs. Vérifiez les textes, la TVA et les totaux avant de le renvoyer ou de le dupliquer."
       )
     );
+  else if (d.origine === "import")
+    zClient.append(
+      h(
+        "div",
+        { class: "bandeau-batifree" },
+        estFact(d)
+          ? "⚠ Facture importée depuis Excel : l'original est celui fait avec votre ancien logiciel. Elle n'est pas envoyée à la plateforme et n'a pas de Factur-X."
+          : "⚠ Devis importé depuis Excel : vérifiez les textes, la TVA et les totaux avant de le renvoyer ou de le dupliquer."
+      )
+    );
   zClient.append(
     h(
       "div",
@@ -1016,7 +1013,8 @@ function construireZoneDevis() {
                   ? "Émise le " + fmtDateHeure(d.emise_le)
                   : "Créé le " + fmtDateHeure(d.cree_le) + " · mis à jour le " + fmtDateHeure(d.modifie_le)
             ),
-            boutonAssocies
+            boutonAssocies,
+            eclairAssocies
           ),
           estFact(d) ? lienOrigine(d) : null,
           h(
@@ -4671,15 +4669,64 @@ function champTauxMO(d, m, tot) {
 function blocRentabilite(d, a) {
   const tauxReel = h("div", { class: "val" });
   const sousReel = h("div", { class: "sous" });
+  // (taux horaire réel : marge brute ÷ (temps d'intervention + temps du relevé et de la réalisation du devis))
+  const totalTrajets = h("div", { class: "sous" });
   const maj = () => {
-    const t = nombre(d.temps_passe);
-    tauxReel.textContent = t > 0 ? euros(a.marge_brute / t) + " / h" : "—";
+    const ti = nombre(d.temps_passe),
+      td = nombre(d.temps_devis),
+      tt = nombre(d.trajets) * nombre(d.trajet_duree),
+      t = ti + td + tt;
+    totalTrajets.textContent = tt > 0 ? `= ${formatHeures(tt)} de trajets, comptés dans le taux réel` : "nombre × durée d'un aller-retour";
+    tauxReel.textContent = ti > 0 ? euros(a.marge_brute / t) + " / h" : "—";
     sousReel.textContent =
-      t > 0
+      ti > 0
         ? `${euros(a.marge_brute)} ÷ ${formatHeures(t)}` +
-          (a.heures ? ` · ${t > a.heures ? "+" : ""}${formatHeures(t - a.heures)} par rapport au prévu` : "")
+          (td > 0 || tt > 0
+            ? ` (${formatHeures(ti)} d'intervention` +
+              (td > 0 ? ` + ${formatHeures(td)} de devis` : "") +
+              (tt > 0 ? ` + ${formatHeures(tt)} de trajets` : "") +
+              ")"
+            : "") +
+          (a.heures ? ` · intervention ${ti > a.heures ? "+" : ""}${formatHeures(ti - a.heures)} par rapport au prévu` : "")
         : "saisissez le temps passé";
   };
+  const champDevis = champHeures(
+    d.temps_devis ?? "",
+    v => {
+      d.temps_devis = v || null;
+      modifie();
+      maj();
+    },
+    { placeholder: "ex. 1h30", style: "width:110px;font-size:16px" }
+  );
+  if (d.temps_devis === null || d.temps_devis === undefined || d.temps_devis === "") champDevis.value = "";
+  // (trajets : leur nombre et la durée d'un aller-retour)
+  const nbTrajets = h("input", {
+    type: "text",
+    class: "nombre",
+    inputmode: "decimal",
+    value: d.trajets ? versChamp(d.trajets) : "",
+    placeholder: "nb",
+    title: "Nombre de trajets (allers-retours) pour ce chantier",
+    style: "width:52px;font-size:16px;text-align:right",
+  });
+  nbTrajets.addEventListener("change", () => {
+    const v = nombre(nbTrajets.value);
+    d.trajets = v > 0 ? v : null;
+    nbTrajets.value = v > 0 ? versChamp(v) : "";
+    modifie();
+    maj();
+  });
+  const dureeTrajet = champHeures(
+    d.trajet_duree ?? "",
+    v => {
+      d.trajet_duree = v || null;
+      modifie();
+      maj();
+    },
+    { placeholder: "A/R ex. 0h40", style: "width:96px;font-size:16px", title: "Durée d'un aller-retour" }
+  );
+  if (d.trajet_duree === null || d.trajet_duree === undefined || d.trajet_duree === "") dureeTrajet.value = "";
   const champ = champHeures(
     d.temps_passe ?? "",
     v => {
@@ -4726,7 +4773,9 @@ function blocRentabilite(d, a) {
         h("div", { class: "val" }, a.heures ? euros(a.taux_horaire_prevu) + " / h" : "—"),
         a.heures ? `marge brute (marge matériel comprise) ÷ ${formatHeures(a.heures)} prévues` : "pas d'heures dans le devis"
       ),
-      carte("Temps passé", h("div", {}, champ), "heures réellement passées (1h30, 1:30…)"),
+      carte("Temps passé", h("div", {}, champ), "heures d'intervention réellement passées (1h30, 1:30…)"),
+      carte("Relevé et devis", h("div", {}, champDevis), "temps du relevé et de la réalisation du devis, compté dans le taux réel"),
+      carte("Trajets", h("div", { style: "display:flex;gap:6px;align-items:center" }, nbTrajets, "×", dureeTrajet), totalTrajets),
       carte("Taux horaire réel", tauxReel, sousReel)
     )
   );
@@ -4761,42 +4810,48 @@ async function zoneAchats(d) {
   if (!r.materiel.length) z.append(h("p", { class: "sous" }, "Aucune fourniture dans ce devis (hors options)."));
   else
     z.append(
-      h(
-        "table",
-        { class: "resultats" },
+      triableParTitres(
         h(
-          "thead",
-          {},
+          "table",
+          { class: "resultats achats-materiel" },
           h(
-            "tr",
+            "thead",
             {},
-            h("th", {}, "Code"),
-            h("th", {}, "Désignation"),
-            h("th", {}, "U"),
-            h("th", { class: "prix" }, "Prix achat U"),
-            h("th", { class: "prix" }, "Qté"),
-            h("th", { class: "prix" }, "Total"),
-            h("th", {}, "Fournisseur")
-          )
-        ),
-        h(
-          "tbody",
-          {},
-          r.materiel.map(m =>
             h(
               "tr",
               {},
-              h("td", {}, m.ref),
-              h("td", {}, m.designation),
-              h("td", {}, m.unite),
-              h("td", { class: "prix" }, champPrixAchat(d, m, r, totalMat)),
-              h("td", { class: "prix" }, versChamp(m.quantite)),
-              h("td", { class: "prix total-mat" }, euros(m.total)),
-              h("td", {}, m.fournisseur)
+              h("th", {}, "Code"),
+              h("th", {}, "Désignation"),
+              h("th", {}, "U"),
+              h("th", { class: "prix" }, "Prix achat U"),
+              h("th", { class: "prix" }, "Qté"),
+              h("th", { class: "prix" }, "Total"),
+              h("th", {}, "Fournisseur")
             )
+          ),
+          h(
+            "tbody",
+            {},
+            r.materiel.map(m =>
+              h(
+                "tr",
+                {},
+                h("td", {}, m.ref),
+                h("td", {}, m.designation),
+                h("td", {}, m.unite),
+                h("td", { class: "prix" }, champPrixAchat(d, m, r, totalMat)),
+                h("td", { class: "prix" }, versChamp(m.quantite)),
+                h("td", { class: "prix total-mat" }, euros(m.total)),
+                h("td", {}, m.fournisseur)
+              )
+            )
+          ),
+          h(
+            "tfoot",
+            {},
+            h("tr", {}, h("td", { colspan: 5, style: "text-align:right;font-weight:600" }, "Total matériel"), totalMat, h("td"))
           )
-        ),
-        h("tfoot", {}, h("tr", {}, h("td", { colspan: 5, style: "text-align:right;font-weight:600" }, "Total matériel"), totalMat, h("td")))
+        )
       )
     );
   if (r.materiel.length)

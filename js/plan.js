@@ -247,6 +247,22 @@ const SYMBOLES = [
     12,
   ],
   [
+    "clim_int",
+    "Climatisation : split intérieur",
+    "Chauffage",
+    "mur",
+    '<g transform="rotate(0) scale(0.4) translate(-50 -50)" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="8,68 92,68 92,32 8,32"></polygon><line x1="14" y1="61" x2="86" y2="61"></line><text fill="currentColor" stroke="none" font-family="Arial, sans-serif" x="50" y="47" font-size="17" font-weight="700" text-anchor="middle" dominant-baseline="central">CLIM</text></g>',
+    7.2,
+  ],
+  [
+    "clim_ext",
+    "Climatisation : groupe extérieur",
+    "Chauffage",
+    "libre",
+    '<g transform="rotate(0) scale(0.4) translate(-50 -50)" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="18,76 82,76 82,24 18,24"></polygon><circle cx="44" cy="50" r="17"></circle><line x1="44" y1="50" x2="44" y2="36"></line><line x1="44" y1="50" x2="56" y2="57"></line><line x1="44" y1="50" x2="32" y2="57"></line><line x1="70" y1="32" x2="70" y2="68"></line><line x1="76" y1="32" x2="76" y2="68"></line></g>',
+    10.4,
+  ],
+  [
     "chauffe_eau",
     "Chauffe-eau",
     "Chauffage",
@@ -398,7 +414,14 @@ const REPERES = [
   ["rep_tv", "TV", "Prise TV", "mur"],
   ["rep_libre", "?", "Cercle + texte libre…", "mur"],
 ];
-function dessinRepere(texte) {
+function dessinRepere(texte, rect) {
+  if (rect) {
+    // (rectangle + texte libre : un élément qui n'est pas dans la liste — pompe, portail, spa… —, relié comme un appareil)
+    const t = String(texte || "").slice(0, 12),
+      fs = t.length <= 4 ? 8 : t.length <= 7 ? 6.5 : 5.2,
+      w = Math.max(13, t.length * fs * 0.32 + 4);
+    return `<rect x="${(-w).toFixed(1)}" y="-9" width="${(2 * w).toFixed(1)}" height="18" rx="1" fill="none"/><text x="0" y="${(fs * 0.36).toFixed(1)}" font-size="${fs}" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">${t.replace(/[<&]/g, "")}</text>`;
+  }
   const t = String(texte || "").slice(0, 6),
     fs = t.length <= 2 ? 11 : t.length <= 3 ? 9 : t.length <= 4 ? 7.5 : 6;
   return `<circle cx="0" cy="0" r="13" fill="none"/><text x="0" y="${(fs * 0.36).toFixed(1)}" font-size="${fs}" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700" stroke="none" fill="currentColor">${t.replace(/[<&]/g, "")}</text>`;
@@ -408,6 +431,17 @@ const CAT_REPERE = { rep_ce: "Chauffage", rep_vmc: "Divers", rep_rj45: "Communic
 REPERES.forEach(([t, txt, lib, pose]) =>
   SYMBOLES.push([t, (t === "rep_libre" ? "" : txt + " – ") + lib, CAT_REPERE[t] || "Appareils", pose, dessinRepere(txt), 13])
 );
+// (rectangle + texte libre : comme le cercle, pour un élément qui n'a pas de symbole ; se relie à une gaine)
+SYMBOLES.push(["rep_rect", "Rectangle + texte libre…", "Divers", "mur", dessinRepere("?", true), 13]);
+/** clé d'un appareil pour le matériel et la légende : un repère (cercle ou rectangle) compte par son texte */
+const cleMateriel = o =>
+  o.type === "rep_rect"
+    ? "rect:" + (o.texte || "?")
+    : o.type === "rep_libre" || (o.texte !== undefined && o.type.startsWith("rep_"))
+      ? "rep:" + (o.texte || "?")
+      : o.type;
+const libMateriel = t =>
+  SYMB[t] ? SYMB[t].libelle : t.startsWith("rep:") ? "Repère « " + t.slice(4) + " »" : t.startsWith("rect:") ? "« " + t.slice(5) + " »" : t;
 /* sanitaires et mobilier : pour voir l'usage de la pièce et placer l'appareillage ; ne comptent nulle part (ni circuit, ni
  * matériel, ni devis, ni tableau, ni gaine). Dessinés dans un carré -20…20 (le dos contre le mur en bas), posés à leur
  * taille réelle (DECOR_TAILLE, largeur × profondeur en cm), réglable dans le panneau. */
@@ -635,6 +669,9 @@ const FILS_APPAREIL = {
   rep_32a: ["P N T", "6"],
   rep_vmc: ["P N T", "1,5"],
   rep_libre: "P N T",
+  rep_rect: "P N T",
+  clim_int: ["P N T", "1,5"],
+  clim_ext: ["P N T", "2,5"],
   vmc: ["P N T", "1,5"],
   volet: "R R N T",
   daaf: "",
@@ -689,6 +726,8 @@ const REPERES_GAINE = {
   exterieur: "EXT",
   baes: "BAES",
   radiateur: "RAD",
+  clim_int: "CLIM",
+  clim_ext: "GE",
   seche_serviettes: "SS",
   chauffe_eau: "CE",
   lave_linge: "LL",
@@ -714,6 +753,88 @@ const REPERES_GAINE = {
   rep_rj45: "RJ",
   rep_tv: "TV",
 };
+/** couleur d'un circuit : un bouton qui ouvre une palette de 30 couleurs (sur tablette, le sélecteur du système n'en
+ *  propose que quelques-unes), et « Autre… » pour toutes les autres */
+const PALETTE_CIRCUITS = [
+  "#e11d48",
+  "#dc2626",
+  "#f97316",
+  "#ea580c",
+  "#d97706",
+  "#ca8a04",
+  "#eab308",
+  "#84cc16",
+  "#65a30d",
+  "#16a34a",
+  "#15803d",
+  "#10b981",
+  "#0d9488",
+  "#06b6d4",
+  "#0891b2",
+  "#0284c7",
+  "#2563eb",
+  "#1d4ed8",
+  "#4f46e5",
+  "#7c3aed",
+  "#9333ea",
+  "#c026d3",
+  "#db2777",
+  "#be123c",
+  "#92400e",
+  "#b45309",
+  "#78716c",
+  "#475569",
+  "#1f2937",
+  "#000000",
+];
+function boutonCouleurCircuit(valeur, change) {
+  const b = h("button", {
+    type: "button",
+    class: "btn petit bouton-couleur",
+    title: "Couleur du circuit",
+    style: `width:30px;height:26px;padding:0;background:${valeur};border:1px solid var(--bord)`,
+  });
+  b.addEventListener("click", e => {
+    e.stopPropagation();
+    document.querySelector(".palette-couleurs")?.remove();
+    const autre = h("input", { type: "color", value: valeur, style: "width:34px;height:28px;padding:0" });
+    const choisir = v => {
+      valeur = v;
+      b.style.background = v;
+      pal.remove();
+      change(v);
+    };
+    autre.addEventListener("change", () => choisir(autre.value));
+    const pal = h(
+      "div",
+      { class: "palette-couleurs" },
+      h(
+        "div",
+        { style: "display:grid;grid-template-columns:repeat(6, 30px);gap:5px" },
+        ...PALETTE_CIRCUITS.map(c =>
+          h("button", {
+            type: "button",
+            title: c,
+            style: `width:30px;height:30px;border-radius:6px;border:${c === valeur ? "3px solid #111" : "1px solid #d1d5db"};background:${c};padding:0`,
+            onclick: () => choisir(c),
+          })
+        )
+      ),
+      h("label", { class: "sous", style: "display:flex;gap:6px;align-items:center;margin-top:6px" }, autre, "Autre couleur…")
+    );
+    document.body.append(pal);
+    const r = b.getBoundingClientRect();
+    pal.style.left = Math.max(8, Math.min(innerWidth - pal.offsetWidth - 8, r.left)) + "px";
+    pal.style.top = Math.max(8, Math.min(innerHeight - pal.offsetHeight - 8, r.bottom + 4)) + "px";
+    const fermer = ev => {
+      if (pal.contains(ev.target)) return;
+      pal.remove();
+      document.removeEventListener("pointerdown", fermer, true);
+    };
+    setTimeout(() => document.addEventListener("pointerdown", fermer, true));
+  });
+  return b;
+}
 const COULEURS_CIRCUITS = [
   "#e11d48",
   "#2563eb",
@@ -1962,45 +2083,25 @@ async function sectionPlans(zone, arg) {
                   : h(
                       "td",
                       { style: "white-space:nowrap" },
-                      h(
-                        "button",
-                        {
-                          class: "btn petit",
-                          title: "Tableau électrique d'après les circuits du plan (module Tableaux)",
-                          onclick: e => {
-                            e.stopPropagation();
-                            aller("plans", { id: p.id, tableau: true });
-                          },
-                        },
-                        "→ Tableau"
-                      ),
                       (PARAMS.general || {}).module_etiquettes
                         ? h(
                             "button",
                             {
                               class: "btn petit",
-                              style: "margin-left:4px",
-                              title: "Étiquettes de tableau (module maison, bêta) d'après les circuits du plan",
+                              title: "Tableau électrique (étiquettes, schéma, nomenclature) d'après les circuits du plan",
                               onclick: e => {
                                 e.stopPropagation();
                                 aller("plans", { id: p.id, etiquettes: true });
                               },
                             },
-                            "→ Étiquettes"
+                            "→ Tableau"
                           )
                         : null,
                       (PARAMS.general || {}).module_etiquettes && p.etiquettes_le
                         ? h(
                             "span",
-                            { class: "sous", style: "margin-left:6px", title: "Tableau (module maison) déjà fait depuis ce plan" },
-                            "fait le " + dateFr(p.etiquettes_le)
-                          )
-                        : null,
-                      p.tableau_le
-                        ? h(
-                            "span",
                             { class: "sous", style: "margin-left:6px", title: "Tableau déjà fait depuis ce plan" },
-                            "fait le " + dateFr(p.tableau_le)
+                            "fait le " + dateFr(p.etiquettes_le)
                           )
                         : null,
                       (PARAMS.plans || {}).ouvrages_actif
@@ -2030,8 +2131,7 @@ async function sectionPlans(zone, arg) {
       : h(
           "p",
           { class: "aide" },
-          "Aucun plan. « + Nouveau plan » pour dessiner une implantation électrique (murs, portes, fenêtres, prises, interrupteurs, lumières, circuits)." +
-            (PLANS_AUTONOMES ? "" : " Un plan peut aussi se créer depuis un devis (bouton « Plan »).")
+          "Aucun plan. « + Nouveau plan » pour dessiner une implantation électrique (murs, portes, fenêtres, prises, interrupteurs, lumières, circuits)."
         )
   );
 }
@@ -2039,43 +2139,69 @@ async function nouveauPlan(v, rattacher) {
   const p = await api("POST", "/api/plans", Object.assign({ nom: "Plan", donnees: plNouvellesDonnees() }, v));
   await aller("plans", { id: p.id, rattacher }); // (nouveau plan depuis la liste : choisir tout de suite client, devis, adresse)
 }
-const SECTION_GENRE_PLAN = { eclairage: "eclairage", tableau: "tableaux", etiquettes: "etiquettes" };
+const SECTION_GENRE_PLAN = { eclairage: "eclairage", etiquettes: "etiquettes" };
 const ouvrirPlanOuEtude = p => aller(SECTION_GENRE_PLAN[p.genre] || "plans", { id: p.id });
 const LIB_GENRE_PLAN = {
   plan: "Plan",
   eclairage: "Étude d'éclairement",
-  tableau: "Tableau électrique",
-  etiquettes: "Étiquettes de tableau",
+  etiquettes: "Tableau électrique",
 };
-/** bouton « Plan » d'un devis : ses plans et études d'éclairement, ou en créer */
-async function menuPlansDevis(bouton, d) {
-  const l = await api("GET", "/api/plans?document_id=" + d.id);
-  const r = bouton.getBoundingClientRect();
-  const G = PARAMS.general || {},
-    base = { document_id: d.id, client_id: d.client_id, adresse: d.chantier_adresse || "" },
-    suite = (d.numero || "") + (d.objet ? " · " + d.objet : "");
-  ouvrirMenuContextuel(
-    r.left,
-    r.bottom,
-    [
-      ...l.map(p => ({ libelle: (LIB_GENRE_PLAN[p.genre] || "Plan") + " « " + (p.nom || "") + " »", action: () => ouvrirPlanOuEtude(p) })),
-      l.length && !d.sansNouveau ? "-" : null,
-      d.sansNouveau || !G.module_electricien
-        ? null
-        : { libelle: "Nouveau plan pour ce devis", action: () => nouveauPlan({ nom: "Plan " + suite, ...base }).catch(erreur) },
-      d.sansNouveau || !G.module_eclairage
-        ? null
-        : {
-            libelle: "Nouvelle étude d'éclairement pour ce devis",
-            action: () => nouvelleEtudeEclairage({ nom: "Éclairage " + suite, ...base }).catch(erreur),
-          },
-      d.sansNouveau || !G.module_tableaux
-        ? null
-        : {
-            libelle: "Nouveau tableau électrique pour ce devis",
-            action: () => nouveauTableau({ nom: "Tableau " + suite, ...base }).catch(erreur),
-          },
-    ].filter(Boolean)
+/** tableaux d'une même installation (plusieurs tableaux reliés) : regroupés en une entrée ; renvoie des
+ *  { plan } ou { groupe: [plans…], tete } dans l'ordre de la liste */
+function regrouperTableaux(plans) {
+  const parGroupe = new Map();
+  for (const p of plans)
+    if (p.genre === "etiquettes" && p.armoire_groupe) {
+      if (!parGroupe.has(p.armoire_groupe)) parGroupe.set(p.armoire_groupe, []);
+      parGroupe.get(p.armoire_groupe).push(p);
+    }
+  const vus = new Set(),
+    out = [];
+  for (const p of plans) {
+    const g = p.genre === "etiquettes" && p.armoire_groupe ? parGroupe.get(p.armoire_groupe) : null;
+    if (!g || g.length < 2) out.push({ plan: p });
+    else if (!vus.has(p.armoire_groupe)) {
+      vus.add(p.armoire_groupe);
+      // (le tableau de tête d'abord : celui qui n'est alimenté par aucun autre)
+      const tete = g.find(x => !x.armoire_parent) || g[0];
+      out.push({ groupe: [tete, ...g.filter(x => x !== tete)], tete });
+    }
+  }
+  return out;
+}
+/** cellule dépliable : « N tableaux — tableau de tête » puis la liste, chaque tableau s'ouvre d'un clic */
+function celluleTableaux(groupe, apresClic) {
+  return h(
+    "details",
+    { class: "groupe-tableaux", onclick: e => e.stopPropagation() },
+    h(
+      "summary",
+      { title: "Installation à plusieurs tableaux : déplier pour les voir" },
+      `${groupe.length} tableaux — ${groupe[0].nom || "Tableau"}`
+    ),
+    h(
+      "ul",
+      {},
+      groupe.map(p =>
+        h(
+          "li",
+          {},
+          h(
+            "a",
+            {
+              href: "#",
+              onclick: e => {
+                e.preventDefault();
+                if (apresClic) apresClic();
+                ouvrirPlanOuEtude(p);
+              },
+            },
+            p.nom || "Tableau"
+          ),
+          p.modifie_le ? h("span", { class: "sous" }, " · " + dateFr(String(p.modifie_le).slice(0, 10))) : null
+        )
+      )
+    )
   );
 }
 
@@ -2145,12 +2271,18 @@ async function rattacherPlan(p, titre, apres) {
   }
   selD.addEventListener("change", () => {
     const x = tousDevis.find(v => String(v.id) === selD.value);
+    // (adresse du chantier : celle du devis — son contact ou son adresse de chantier —, sinon celle du client ;
+    //  posée avant le client, pour qu'il ne la remplace pas par la sienne)
+    if (x && x.chantier_adresse) adr.value = x.chantier_adresse;
+    else if (x && x.client_id && String(x.client_id) !== String(clientId)) adr.value = "";
     if (x && x.client_id && String(x.client_id) !== String(clientId)) {
       const c = clients.find(v => v.id === x.client_id);
       if (c) champC.value = nomDe(c);
       choisirClient(x.client_id).catch(erreur);
+    } else if (x && !x.chantier_adresse && !adr.value.trim()) {
+      const c = clients.find(v => String(v.id) === String(x.client_id));
+      if (c) adr.value = [c.adresse, [c.cp, c.ville].filter(Boolean).join(" ")].filter(Boolean).join("\n");
     }
-    if (x && x.chantier_adresse && !adr.value.trim()) adr.value = x.chantier_adresse;
   });
   chargerDevis();
   await chargerAdresses();
@@ -2194,7 +2326,35 @@ async function rattacherPlan(p, titre, apres) {
 }
 
 /* ---------- éditeur ---------- */
+/** symboles du plan en fichiers .svg (web/symboles/plan, puis ceux de l'utilisateur du même nom, dossier « symboles »
+ *  des données) : ils remplacent les dessins intégrés ; cadre -20…20, le mur en bas (y = 20). Chargés une fois ; la
+ *  version autonome (sans serveur) garde les dessins intégrés. */
+let plSymbolesCharges = null;
+function plChargerSymboles() {
+  if (PLANS_AUTONOMES) return Promise.resolve();
+  if (!plSymbolesCharges)
+    plSymbolesCharges = api("GET", "/api/symboles")
+      .then(r => {
+        let change = false;
+        for (const [cle, t] of Object.entries(r.plan || {})) {
+          if (!SYMB[cle] || typeof etSvgVersDessin !== "function") continue;
+          const des = etSvgVersDessin(t, 40, 40);
+          if (!des) continue;
+          const dessin = `<g transform="translate(-20 -20)">${des}</g>`;
+          SYMB[cle].dessin = dessin;
+          const i = SYMBOLES.findIndex(x => x[0] === cle);
+          if (i >= 0) SYMBOLES[i][4] = dessin;
+          change = true;
+        }
+        if (change) RECO_MODELES = null; // (modèles de la main levée refaits d'après les nouveaux dessins)
+      })
+      .catch(() => {
+        /* (sans les fichiers : les dessins intégrés) */
+      });
+  return plSymbolesCharges;
+}
 async function ouvrirPlan(zone, id, arg) {
+  await plChargerSymboles();
   const p = await api("GET", "/api/plans/" + id);
   const d = Object.assign(plNouvellesDonnees(), p.donnees || {});
   PL.plan = p;
@@ -2261,24 +2421,36 @@ async function ouvrirPlan(zone, id, arg) {
   };
   const AVIS_FIGE =
     "🔒 Ce mur a une longueur figée : il ne peut pas être allongé ni raccourci (décochez « Longueur figée » dans le panneau de droite).";
-  /** boîtes de dérivation : numérotées B1, B2… (nouvelle boîte : le numéro suivant, sur tous les niveaux) */
-  function numeroterBoites(tout) {
-    const toutes = [...d.objets, ...Object.values(d.etages || {}).flatMap(n => (n && n.objets) || [])].filter(o => o.type === "boite");
-    if (tout) {
-      // (renuméroter le niveau affiché : de gauche à droite, de haut en bas)
-      const ici = d.objets.filter(o => o.type === "boite").sort((a, b) => Math.round(a.y / 150) - Math.round(b.y / 150) || a.x - b.x);
-      const pris = new Set(toutes.filter(o => !ici.includes(o)).map(o => o.num));
-      let n = 1;
-      ici.forEach(o => {
-        while (pris.has("B" + n)) n++;
-        o.num = "B" + n++;
+  /** numérotation automatique (⚙ Options > Dessin et symboles) : des symboles choisis, chacun avec son préfixe — par
+   *  défaut les boîtes de dérivation, B1, B2… ; un nouveau : le numéro suivant, sur tous les niveaux */
+  const NUMEROTATION_DEFAUT = [{ type: "boite", prefixe: "B" }];
+  const reglesNumeros = () => {
+    const l = optPlans().numerotation;
+    return (Array.isArray(l) ? l : NUMEROTATION_DEFAUT).filter(r => r && r.type && SYMB[r.type] && r.prefixe);
+  };
+  const prefixeNum = type => (reglesNumeros().find(r => r.type === type) || {}).prefixe || null;
+  function numeroterAuto(tout, seulType) {
+    const tous = [...d.objets, ...Object.values(d.etages || {}).flatMap(n => (n && n.objets) || [])];
+    for (const { type, prefixe } of reglesNumeros()) {
+      if (seulType && type !== seulType) continue;
+      const re = new RegExp("^" + prefixe.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(\\d+)$");
+      const toutes = tous.filter(o => o.type === type);
+      if (tout) {
+        // (renuméroter le niveau affiché : de gauche à droite, de haut en bas)
+        const ici = d.objets.filter(o => o.type === type).sort((a, b) => Math.round(a.y / 150) - Math.round(b.y / 150) || a.x - b.x);
+        const pris = new Set(toutes.filter(o => !ici.includes(o)).map(o => o.num));
+        let n = 1;
+        ici.forEach(o => {
+          while (pris.has(prefixe + n)) n++;
+          o.num = prefixe + n++;
+        });
+        continue;
+      }
+      let max = Math.max(0, ...toutes.map(o => Number(re.exec(o.num || "")?.[1] || 0)));
+      toutes.forEach(o => {
+        if (!o.num) o.num = prefixe + ++max;
       });
-      return;
     }
-    let max = Math.max(0, ...toutes.map(o => Number(/^B(\d+)$/.exec(o.num || "")?.[1] || 0)));
-    toutes.forEach(o => {
-      if (!o.num) o.num = "B" + ++max;
-    });
   }
   /** traversée de plancher : la même, à la même place, sur le niveau du dessus (ou du dessous) ; les gaines passent de l'une à l'autre */
   function jumelerTraversee(ob, cible) {
@@ -2422,7 +2594,7 @@ async function ouvrirPlan(zone, id, arg) {
       if (!d.blocs.length) delete d.blocs;
     }
     majNiveauxLies();
-    numeroterBoites();
+    numeroterAuto();
     numeroterGaines();
     majPiecesObjets();
     // symboles importés utilisés : gardés dans le plan (il s'ouvre aussi sur un autre PC)
@@ -2551,7 +2723,8 @@ async function ouvrirPlan(zone, id, arg) {
           h(
             "button",
             { class: "btn", title: "Imprimer le plan, ou l'enregistrer en PDF (A4, A3, échelle)", onclick: () => dialogueImpression() },
-            "🖨 PDF / Imprimer"
+            iconeImprimante(),
+            "PDF / Imprimer"
           ),
           h(
             "button",
@@ -2756,6 +2929,59 @@ async function ouvrirPlan(zone, id, arg) {
     );
     tChant.value = TYPES_CHANTIER[o.chantier_defaut] ? o.chantier_defaut : "neuf";
     // (options rangées par onglets ; le dernier onglet ouvert est gardé sur ce PC)
+    // (numérotation automatique : des symboles choisis, chacun son préfixe — ex. boîte B, prise PC, point lumineux L)
+    let regles = (Array.isArray(optPlans().numerotation) ? optPlans().numerotation : [{ type: "boite", prefixe: "B" }]).map(r => ({
+      ...r,
+    }));
+    const listeNum = h("div", { class: "pile", style: "gap:4px" });
+    const majListeNum = () =>
+      listeNum.replaceChildren(
+        ...regles.map((r, i) => {
+          const sel = h(
+            "select",
+            { style: "width:auto;max-width:240px" },
+            ...SYMBOLES.filter(x => !x[0].startsWith("rep_") && !DECOR_TAILLE[x[0]]).map(x => h("option", { value: x[0] }, x[1]))
+          );
+          sel.value = r.type;
+          sel.addEventListener("change", () => (r.type = sel.value));
+          const px = h("input", { type: "text", value: r.prefixe || "", maxlength: 6, style: "width:70px", placeholder: "ex. PC" });
+          px.addEventListener("change", () => (r.prefixe = px.value.trim()));
+          return h(
+            "div",
+            { style: "display:flex;gap:6px;align-items:center" },
+            sel,
+            px,
+            h("span", { class: "sous" }, "→ " + (r.prefixe || "?") + "1, " + (r.prefixe || "?") + "2…"),
+            h(
+              "button",
+              {
+                type: "button",
+                class: "btn petit",
+                title: "Ne plus numéroter ce symbole",
+                onclick: () => {
+                  regles.splice(i, 1);
+                  majListeNum();
+                },
+              },
+              "✕"
+            )
+          );
+        }),
+        h(
+          "button",
+          {
+            type: "button",
+            class: "btn petit",
+            style: "align-self:flex-start",
+            onclick: () => {
+              regles.push({ type: "prise", prefixe: "PC" });
+              majListeNum();
+            },
+          },
+          "+ Numéroter un autre symbole"
+        )
+      );
+    majListeNum();
     const ONGLETS_OPT = [
       ["dessin", "Dessin et symboles"],
       ["circuits", "Circuits"],
@@ -2792,6 +3018,13 @@ async function ouvrirPlan(zone, id, arg) {
           ligne("Taille du texte de l'écran Plans", tTexte, "Liste des symboles, panneau de droite, outils")
         ),
         h("div", { class: "deux" }, ligne("Traits des symboles", tSymb, "À l'écran et à l'impression (gras : plus lisible sur papier)")),
+        h("h4", { style: "margin:8px 0 0" }, "Numérotation automatique"),
+        h(
+          "p",
+          { class: "aide", style: "margin:0" },
+          "Chaque symbole de la liste reçoit son numéro (préfixe puis 1, 2…, sur tous les niveaux), affiché à côté de lui ; il se change dans le panneau de droite, « Renuméroter » les remet dans l'ordre."
+        ),
+        listeNum,
         h(
           "div",
           { class: "deux" },
@@ -3121,6 +3354,7 @@ async function ouvrirPlan(zone, id, arg) {
                   moulures: listeMo.value.trim() || null,
                   couleur_goulotte: coulGo.value,
                   goulottes: listeGo.value.trim() || null,
+                  numerotation: regles.filter(r => r.type && r.prefixe),
                 };
                 majVersionParams(await api("PUT", "/api/parametres", { plans }));
                 PARAMS.plans = Object.assign(PARAMS.plans || {}, plans);
@@ -3437,6 +3671,35 @@ async function ouvrirPlan(zone, id, arg) {
           "Décochez les symboles que vous n'utilisez pas (par exemple un doublon entre un symbole et son repère cercle + lettres) : ils ne sont plus proposés dans la liste de gauche. Ceux déjà posés restent sur les plans. ⇄ : ranger un symbole dans une autre catégorie (ou une nouvelle) ; ✎ renommer une catégorie. Le rangement sert à la liste de gauche, aux calques et aux ouvrages des appareils."
         ),
         liste,
+        PLANS_AUTONOMES
+          ? null
+          : h(
+              "div",
+              { class: "encadre", style: "display:flex;flex-direction:column;gap:6px" },
+              h("b", {}, "Changer le dessin d'un symbole de la liste"),
+              h(
+                "p",
+                { class: "aide", style: "margin:0" },
+                "Un fichier .svg du même nom (prise.svg, inter.svg…) dans le sous-dossier « plan » du dossier des symboles remplace le dessin du logiciel (modèles : web\\symboles\\plan du dossier du logiciel ; voir le LISEZ-MOI). Puis Ctrl+F5."
+              ),
+              h(
+                "button",
+                {
+                  type: "button",
+                  class: "btn",
+                  style: "align-self:flex-start",
+                  onclick: async () => {
+                    try {
+                      const r = await api("POST", "/api/symboles/ouvrir");
+                      toast("Dossier ouvert : " + r.chemin + " — sous-dossier « plan ».");
+                    } catch (e) {
+                      erreur(e);
+                    }
+                  },
+                },
+                "🖌 Ouvrir le dossier des symboles"
+              )
+            ),
         h("h4", { style: "margin:10px 0 0" }, CAT_PERSO),
         listePerso,
         h(
@@ -3593,6 +3856,14 @@ async function ouvrirPlan(zone, id, arg) {
     ]);
   };
   etat.genrePorte = "porte";
+  etat.genreMur = "droit"; // (outil Mur : murs droits, ou arrondi entre deux murs)
+  // (outil Porte : [lettre du bouton, libellé court, libellé du menu])
+  const GENRES_PORTE = {
+    porte: ["P", "Porte", "Porte (battant)"],
+    passage: ["L", "Libre", "Libre, sans porte"],
+    galandage: ["G", "Galandage", "Porte coulissante à galandage (dans la cloison)"],
+    applique: ["A", "Applique", "Porte coulissante en applique (sur le mur)"],
+  };
   // l'icône et le libellé des outils à options montrent le choix en cours
   const ICONE_MAIN = { murs: "✍", symboles: "⚡", gaines: "⌇", notes: "✏" };
   const svgIcone = corps =>
@@ -3609,6 +3880,14 @@ async function ouvrirPlan(zone, id, arg) {
     ),
   };
   function majBoutonsOptions() {
+    const bmur = boutonsOutils.find(x => x.dataset.outil === "mur");
+    if (bmur) {
+      const arr = etat.genreMur === "arrondi";
+      bmur.dataset.mode = arr ? "R" : "";
+      bmur.querySelector(".ic-outil").textContent = arr ? "◠" : "▭";
+      bmur.querySelector(".lib-outil").textContent = arr ? " Arrondi" : " Mur";
+      bmur.title = (arr ? "Arrondir l'angle entre deux murs" : "Murs droits") + " — touche M (2e appui : mur droit ou arrondi)";
+    }
     const bm = boutonsOutils.find(x => x.dataset.outil === "main"),
       bp = boutonsOutils.find(x => x.dataset.outil === "porte"),
       bg = boutonsOutils.find(x => x.dataset.outil === "gaine");
@@ -3625,11 +3904,12 @@ async function ouvrirPlan(zone, id, arg) {
       bm.title = "Main levée : " + LIB_MAIN[etat.modeMain] + " — touche H (2e appui : changer de mode)";
     }
     if (bp) {
-      const pass = etat.genrePorte === "passage";
-      bp.dataset.mode = pass ? "L" : "P";
+      const pass = etat.genrePorte === "passage",
+        gp = GENRES_PORTE[etat.genrePorte] || GENRES_PORTE.porte;
+      bp.dataset.mode = gp[0];
       bp.querySelector(".ic-outil").innerHTML = ICONES_SVG[pass ? "passage" : "porte"];
-      bp.querySelector(".lib-outil").textContent = pass ? " Libre" : " Porte";
-      bp.title = (pass ? "Ouverture libre, sans porte" : "Porte") + " — touche P (2e appui : porte ou libre)";
+      bp.querySelector(".lib-outil").textContent = " " + gp[1];
+      bp.title = gp[2] + " — touche P (2e appui : porte, libre, à galandage, en applique)";
     }
   }
   // outil Gaine : gaines (encastré) ou moulures (apparent) ; les deux sur le même plan
@@ -3665,27 +3945,36 @@ async function ouvrirPlan(zone, id, arg) {
       },
     ]);
   };
+  const choisirGenreMur = g => {
+    etat.genreMur = g;
+    majBoutonsOptions();
+    choisirOutil("mur");
+  };
+  const menuMur = bouton => {
+    const r = bouton.getBoundingClientRect(),
+      enColonne = !!bouton.closest(".plan-outils-col");
+    ouvrirMenuContextuel(enColonne ? r.right + 4 : r.left, enColonne ? r.top : r.bottom + 4, [
+      { titre: "Outil Mur" },
+      { libelle: "▭ Murs droits" + (etat.genreMur !== "arrondi" ? "  ✓" : ""), action: () => choisirGenreMur("droit") },
+      {
+        libelle: "◠ Arrondi : le bout de deux murs, puis le rayon" + (etat.genreMur === "arrondi" ? "  ✓" : ""),
+        action: () => choisirGenreMur("arrondi"),
+      },
+    ]);
+  };
   const menuPorte = bouton => {
     const r = bouton.getBoundingClientRect(),
       enColonne = !!bouton.closest(".plan-outils-col");
     ouvrirMenuContextuel(enColonne ? r.right + 4 : r.left, enColonne ? r.top : r.bottom + 4, [
       { titre: "Ouverture à poser sur un mur" },
-      {
-        libelle: "Porte (battant)" + (etat.genrePorte === "porte" ? "  ✓" : ""),
+      ...Object.entries(GENRES_PORTE).map(([k, [, , lib]]) => ({
+        libelle: lib + (etat.genrePorte === k ? "  ✓" : ""),
         action: () => {
-          etat.genrePorte = "porte";
+          etat.genrePorte = k;
           majBoutonsOptions();
           choisirOutil("porte");
         },
-      },
-      {
-        libelle: "Libre, sans porte" + (etat.genrePorte === "passage" ? "  ✓" : ""),
-        action: () => {
-          etat.genrePorte = "passage";
-          majBoutonsOptions();
-          choisirOutil("porte");
-        },
-      },
+      })),
     ]);
   };
   const boutonsOutils = outils.map(([o, lib, touche]) =>
@@ -3701,6 +3990,9 @@ async function ouvrirPlan(zone, id, arg) {
           if (o === "main") {
             if (etat.outil === "main") menuMain(e.currentTarget);
             else choisirMain(etat.modeMain);
+          } else if (o === "mur") {
+            if (etat.outil === "mur") menuMur(e.currentTarget);
+            else choisirOutil("mur");
           } else if (o === "porte") {
             if (etat.outil === "porte") menuPorte(e.currentTarget);
             else choisirOutil("porte");
@@ -3715,19 +4007,11 @@ async function ouvrirPlan(zone, id, arg) {
       h("kbd", { class: "rc" }, touche)
     )
   );
-  const selCotes = h(
-    "select",
-    { title: "Cotes affichées sur le plan (une cote se montre ou se cache aussi mur par mur)", style: "width:auto" },
-    h("option", { value: "toutes" }, "Cotes : tous les murs"),
-    h("option", { value: "principales" }, "Cotes : principales"),
-    h("option", { value: "aucune" }, "Cotes : aucune")
-  );
-  selCotes.value = d.cotes || "toutes";
-  selCotes.addEventListener("change", () => {
-    d.cotes = selCotes.value;
-    selCotes.blur();
-    valider();
-  });
+  // (cotes : avant la 0.68.23, une liste « tous les murs / principales / aucune » ; maintenant des cases)
+  if (d.cotes_ext === undefined) {
+    d.cotes_ext = (d.cotes || "toutes") === "toutes";
+    d.cotes_principales = d.cotes === "principales";
+  }
   // niveaux (étages) : un plan par niveau, circuits communs
   const selNiveau = h("select", {
     title: "Niveau affiché (étage). Les circuits sont communs à tous les niveaux.",
@@ -3738,6 +4022,10 @@ async function ouvrirPlan(zone, id, arg) {
       ...d.niveaux.map(n => h("option", { value: n.id }, "Niveau : " + (n.nom || "?"))),
       h("option", { value: "+" }, "＋ Ajouter un niveau…"),
       h("option", { value: "~" }, "✎ Renommer ce niveau…"),
+      d.niveaux.length > 1 && d.niveaux[0].id !== d.niveau ? h("option", { value: "<" }, "↓ Placer ce niveau plus bas") : "",
+      d.niveaux.length > 1 && d.niveaux[d.niveaux.length - 1].id !== d.niveau
+        ? h("option", { value: ">" }, "↑ Placer ce niveau plus haut")
+        : "",
       d.niveaux.length > 1 ? h("option", { value: "-" }, "✕ Supprimer ce niveau…") : ""
     );
     selNiveau.value = d.niveau;
@@ -3767,6 +4055,17 @@ async function ouvrirPlan(zone, id, arg) {
       majNiveaux();
       return;
     }
+    if (v === "<" || v === ">") {
+      // (ordre des niveaux : du plus bas au plus haut — ex. un sous-sol ajouté après coup, placé sous le rez-de-chaussée)
+      const i = d.niveaux.findIndex(x => x.id === d.niveau),
+        j = v === "<" ? i - 1 : i + 1;
+      if (i >= 0 && j >= 0 && j < d.niveaux.length) {
+        [d.niveaux[i], d.niveaux[j]] = [d.niveaux[j], d.niveaux[i]];
+        valider();
+      }
+      majNiveaux();
+      return;
+    }
     if (v === "-") {
       const nv = d.niveaux.find(x => x.id === d.niveau);
       if (await demanderOui("Supprimer le niveau « " + nv.nom + " » et tout ce qui est dessiné dessus ?")) {
@@ -3780,6 +4079,11 @@ async function ouvrirPlan(zone, id, arg) {
     changerNiveau(v);
   });
   const CHAMPS_NIVEAU = ["murs", "ouvertures", "objets", "liaisons", "gaines", "pieces", "fond", "blocs"];
+  /** fond d'un autre niveau, gardé en vue sur tous les niveaux (case de la fenêtre du fond) */
+  function fondAutreNiveau() {
+    for (const e of Object.values(d.etages || {})) if (e && e.fond && e.fond.tous && e.fond.src) return e.fond;
+    return null;
+  }
   function vider() {
     d.murs = [];
     d.ouvertures = [];
@@ -3817,7 +4121,7 @@ async function ouvrirPlan(zone, id, arg) {
         d.murs = JSON.parse(JSON.stringify(dessous.murs));
     }
     majNiveaux();
-    choisirOutil(d.murs.length ? "selection" : "mur");
+    choisirOutil("selection"); // (jamais le mur d'office : un appui de trop dessinait un mur)
     valider();
   }
   // calques : ce qui est affiché (et imprimé)
@@ -3987,7 +4291,7 @@ async function ouvrirPlan(zone, id, arg) {
     };
     listeSymb.replaceChildren(
       ...cats.flatMap(cat => {
-        const ouverte = !!q || etat.tablette || ouvertes.has(cat),
+        const ouverte = !!q || ouvertes.has(cat),
           n = dispo.filter(x => catVue(x[0]) === cat).length;
         return [
           h(
@@ -3998,7 +4302,7 @@ async function ouvrirPlan(zone, id, arg) {
               title: ouverte ? "Replier" : "Déplier",
               onclick: e => {
                 e.currentTarget.blur();
-                if (!q && !etat.tablette) basculer(cat);
+                if (!q) basculer(cat);
               },
             },
             h("span", { class: "fleche" }, ouverte ? "▾" : "▸"),
@@ -4069,6 +4373,7 @@ async function ouvrirPlan(zone, id, arg) {
     } // (gaine ou liaison qu'on courbait : gardée telle quelle)
     etat.outil = o;
     etat.mur = null;
+    etat.arrondi1 = null;
     etat.liaison = null;
     etat.gaine = null;
     etat.piece = null;
@@ -4082,7 +4387,10 @@ async function ouvrirPlan(zone, id, arg) {
     aide.textContent = {
       selection:
         "Clic : choisir · Ctrl+clic ou Maj+clic : ajouter · cadre dans le vide · Ctrl+A : tout · glisser : déplacer (un mur glisse d'équerre et étire les murs reliés) · double-clic sur un appareil : son groupe de liaisons · poignées : taille d'un appareil, courbe d'une liaison · Suppr · R : tourner · ? : aide",
-      mur: "Clic : point de départ, puis clic à chaque angle · angles droits automatiques (Maj : angle libre) · tapez une longueur (ex. 3,45) puis Entrée · double-clic ou clic droit : fin du mur · Échap ou clic droit : sélection",
+      mur:
+        etat.genreMur === "arrondi"
+          ? "Arrondi : clic sur le 1er mur, puis sur le 2e, sur leur moitié côté arrondi (le bout le plus proche est pris) ; tapez le rayon (cm) : l'angle devient un arc de cercle (ils n'ont pas besoin de se toucher) ; deux murs parallèles : arc de l'un à l'autre · rayon à changer : choisissez l'arrondi (panneau de droite) · M : murs droits · Échap ou clic droit : sélection"
+          : "Clic : point de départ, puis clic à chaque angle · angles droits automatiques (Maj : angle libre) · tapez une longueur (ex. 3,45) puis Entrée · double-clic ou clic droit : fin du mur · Échap ou clic droit : sélection",
       rectangle:
         "Pièce rectangulaire : clic sur un angle puis sur l'angle opposé (ou glisser) · ou tapez les dimensions en mètres (ex. 4,5x3) puis Entrée · les murs déjà là ne sont pas doublés · Échap ou clic droit : sélection",
       main:
@@ -4154,6 +4462,7 @@ async function ouvrirPlan(zone, id, arg) {
     paletteNotes.style.display = vis ? "" : "none";
     const FORMES = [
       ["libre", "✎", "Dessin libre"],
+      ["ligne", "╱", "Trait droit (d'un point à l'autre)"],
       ["cercle", "◯", "Cercle (tirer d'un coin à l'autre)"],
       ["rect", "▭", "Rectangle"],
       ["fleche", "➝", "Flèche (de la queue à la pointe)"],
@@ -4518,9 +4827,35 @@ async function ouvrirPlan(zone, id, arg) {
       moins = libre(-1);
     return plus && !moins ? 1 : moins && !plus ? -1 : plus && moins ? -1 : 0;
   }
-  // (cotes intérieures affichées : les murs intérieurs n'ont plus leur cote propre, sauf case cochée à la main)
+  // (mur intérieur : pas de cote propre — ses cotes sont les cotes intérieures des pièces —, sauf case cochée à la main)
   const coteVisible = m =>
-    m.cote === true || (m.cote !== false && (d.cotes || "toutes") === "toutes" && !(d.cotes_interieures && coteExterieur(m) === 0));
+    !m.arc && !d.cotes_masquees && (m.cote === true || (m.cote !== false && d.cotes_ext !== false && coteExterieur(m) !== 0));
+  /** mur de façade : de combien sa face extérieure dépasse son axe à chaque bout (le coin, ou un bout libre : la
+   *  demi-épaisseur ; un mur qui le prolonge tout droit : rien) */
+  function prolongementsExterieurs(m) {
+    const L = dist(m.a, m.b) || 1,
+      ux = (m.b.x - m.a.x) / L,
+      uy = (m.b.y - m.a.y) / L,
+      ep = (m.ep || d.epaisseur) / 2;
+    return ["a", "b"].map(k => {
+      const q = m[k];
+      const suite = d.murs.some(w => {
+        if (w === m) return false;
+        const Lw = dist(w.a, w.b);
+        if (Lw < 1) return false;
+        const touche = dist(w.a, q) < 1 || dist(w.b, q) < 1;
+        return touche && Math.abs(((w.b.x - w.a.x) * uy - (w.b.y - w.a.y) * ux) / Lw) < 0.05;
+      });
+      return suite ? 0 : ep;
+    });
+  }
+  /** longueur d'un mur à afficher et à taper : de façade, au bord extérieur ; sinon, d'axe à axe */
+  const longueurAffichee = m => {
+    const L = dist(m.a, m.b);
+    if (coteExterieur(m) === 0) return L;
+    const [ea, eb] = prolongementsExterieurs(m);
+    return L + ea + eb;
+  };
   /** premier mur touché en partant de pt dans la direction (dx, dy) */
   function rayon(pt, dx, dy) {
     let best = Infinity,
@@ -4995,8 +5330,7 @@ async function ouvrirPlan(zone, id, arg) {
   async function modifierCoteInterieure(sg) {
     const m = murDe(sg.mur);
     if (!m) return;
-    const cle = cleSegment(sg),
-      dejaFixe = !!coteFixee(sg);
+    const dejaFixe = !!coteFixee(sg);
     const champ = h("input", {
       type: "text",
       inputmode: "decimal",
@@ -5047,6 +5381,14 @@ async function ouvrirPlan(zone, id, arg) {
       toast("Indiquez une dimension en mètres.", true);
       return;
     }
+    appliquerCoteInterieure(sg, nv, rep.garder);
+  }
+  /** cote intérieure tapée (en cm) : la cloison (ou le mur) au bout de cette partie se déplace ; garder : 🔒 */
+  function appliquerCoteInterieure(sg, nv, garder, bout) {
+    const m = murDe(sg.mur);
+    if (!m) return;
+    const cle = cleSegment(sg);
+    const rep = { garder };
     const delta = nv - sg.longueur;
     const majFixe = () => {
       d.cotes_fixes = (d.cotes_fixes || []).filter(f => f.cle !== cle);
@@ -5070,8 +5412,10 @@ async function ouvrirPlan(zone, id, arg) {
       debut = sg.debut.mur && !sg.debut.traversant && murDe(sg.debut.mur);
     const essais = [];
     // (les murs sont repris par leur identifiant à chaque essai : entre deux essais, le dessin est remis tel qu'avant)
-    if (fin) essais.push({ faire: () => translaterMur(murDe(fin.id), ux * delta, uy * delta), facade: coteExterieur(fin) !== 0 });
-    if (debut) essais.push({ faire: () => translaterMur(murDe(debut.id), -ux * delta, -uy * delta), facade: coteExterieur(debut) !== 0 });
+    if (fin)
+      essais.push({ faire: () => translaterMur(murDe(fin.id), ux * delta, uy * delta), facade: coteExterieur(fin) !== 0, cote: "b" });
+    if (debut)
+      essais.push({ faire: () => translaterMur(murDe(debut.id), -ux * delta, -uy * delta), facade: coteExterieur(debut) !== 0, cote: "a" });
     if (!essais.length && sg.fin.bout === "b")
       essais.push({
         faire: () => {
@@ -5102,7 +5446,9 @@ async function ouvrirPlan(zone, id, arg) {
       remettre();
     }
     essais.sort((a, b) => a.cassees - b.cassees || (a.facade ? 1 : 0) - (b.facade ? 1 : 0));
-    essais[0].faire();
+    // (bout choisi dans le panneau du mur : le mur de ce côté-là bouge, s'il peut)
+    const choisi = bout && essais.find(e => e.cote === bout);
+    (choisi || essais[0]).faire();
     const cassees = fixesCassees(cle);
     majFixe();
     if (cassees.length) {
@@ -5116,28 +5462,29 @@ async function ouvrirPlan(zone, id, arg) {
   function majPanneau() {
     panneau.replaceChildren();
     // (tablette : niveau et cotes en haut du panneau)
-    const cInt = h("input", { type: "checkbox", checked: !!d.cotes_interieures });
-    cInt.addEventListener("change", () => {
-      d.cotes_interieures = cInt.checked;
-      valider();
-    });
+    const caseCote = (cle, lib, titre) => {
+      const c = h("input", { type: "checkbox", checked: cle === "cotes_ext" ? d.cotes_ext !== false : !!d[cle] });
+      c.addEventListener("change", () => {
+        d[cle] = c.checked;
+        valider();
+      });
+      if (cle !== "cotes_masquees" && d.cotes_masquees) c.disabled = true;
+      return h("label", { class: "case", title: titre }, c, lib);
+    };
     panneau.append(
+      h("div", { class: "plan-bloc plan-affichage", "data-cle": "affichage" }, h("h4", {}, "Affichage"), selNiveau),
       h(
         "div",
-        { class: "plan-bloc plan-affichage", "data-cle": "affichage" },
-        h("h4", {}, "Affichage"),
-        selNiveau,
-        selCotes,
-        h(
-          "label",
-          {
-            class: "case",
-            title:
-              "De chaque côté des murs, une cote par partie de pièce (entre les cloisons), en vert ; clic dessus pour changer la dimension",
-          },
-          cInt,
-          "Cotes intérieures des pièces"
-        )
+        { class: "plan-bloc plan-cotes", "data-cle": "cotes" },
+        h("h4", {}, "Cotes"),
+        caseCote("cotes_principales", "Murs extérieurs", "Largeur et profondeur de tout le plan, faces extérieures"),
+        caseCote("cotes_ext", "Murs extérieurs détaillés", "Longueur de chaque mur de façade, prise au bord extérieur"),
+        caseCote(
+          "cotes_interieures",
+          "Murs intérieurs (cotes intérieures)",
+          "De chaque côté des murs, une cote par partie de pièce (entre les cloisons), en vert ; clic dessus pour changer la dimension"
+        ),
+        caseCote("cotes_masquees", "Masquer les cotes", "Aucune cote affichée (les cases ci-dessus sont gardées pour la suite)")
       )
     );
     const sel = [...etat.sel];
@@ -5173,13 +5520,21 @@ async function ouvrirPlan(zone, id, arg) {
         const genre = h(
           "select",
           {},
-          h("option", { value: "porte" }, "Porte"),
+          h("option", { value: "porte" }, "Porte (battant)"),
+          h("option", { value: "galandage" }, "Porte coulissante à galandage (dans la cloison)"),
+          h("option", { value: "applique" }, "Porte coulissante en applique (sur le mur)"),
           h("option", { value: "passage" }, "Libre (sans porte)"),
           h("option", { value: "fenetre" }, "Fenêtre")
         );
-        genre.value = o.genre;
+        genre.value = o.genre === "porte" && o.coulissante ? o.coulissante : o.genre;
         genre.addEventListener("change", () => {
-          o.genre = genre.value;
+          if (genre.value === "galandage" || genre.value === "applique") {
+            o.genre = "porte";
+            o.coulissante = genre.value;
+          } else {
+            o.genre = genre.value;
+            delete o.coulissante;
+          }
           valider();
         });
         bloc.append(
@@ -5205,7 +5560,46 @@ async function ouvrirPlan(zone, id, arg) {
               "Effacer vraiment ce morceau de mur"
             )
           );
-        if (o.genre === "porte")
+        if (o.genre === "porte" && o.coulissante)
+          // (coulissante : elle s'efface d'un côté de l'ouverture — dans la cloison, ou le long du mur, sur une face)
+          bloc.append(
+            h(
+              "div",
+              { style: "display:flex;gap:6px;flex-wrap:wrap" },
+              h(
+                "button",
+                {
+                  class: "btn petit",
+                  onclick: () => {
+                    o.charniere = o.charniere === "d" ? "g" : "d";
+                    valider();
+                  },
+                },
+                "⇆ S'efface de l'autre côté"
+              ),
+              o.coulissante === "applique"
+                ? h(
+                    "button",
+                    {
+                      class: "btn petit",
+                      onclick: () => {
+                        o.sens = -(o.sens || 1);
+                        valider();
+                      },
+                    },
+                    "⇅ Sur l'autre face du mur"
+                  )
+                : null
+            ),
+            h(
+              "p",
+              { class: "aide", style: "margin:4px 0 0" },
+              o.coulissante === "galandage"
+                ? "Le vantail rentre dans la cloison (pointillé) : pas d'appareillage encastré sur ce morceau de cloison, des deux côtés."
+                : "Le vantail glisse le long du mur, sur cette face : pas d'appareillage sur ce morceau de mur (pointillé)."
+            )
+          );
+        else if (o.genre === "porte")
           bloc.append(
             h(
               "div",
@@ -5249,6 +5643,32 @@ async function ouvrirPlan(zone, id, arg) {
             )
           );
       }
+      // un mur arrondi choisi (tous ses morceaux) : son rayon
+      const arcSeul = murs.length && murs.every(m => m.arc && m.arc === murs[0].arc) && !objs.length ? murs[0] : null;
+      if (arcSeul) {
+        const r = h("input", { type: "number", step: 1, min: 1, value: Math.round(arcSeul.rayon), style: "width:90px" });
+        r.addEventListener("change", () => {
+          const v = nombre(r.value);
+          if (v > 0) changerRayon(arcSeul.arc, v);
+        });
+        bloc.append(
+          h("div", {}, "Mur arrondi"),
+          h("label", { class: "champ" }, h("span", {}, "Rayon (cm, au milieu du mur)"), r),
+          h(
+            "button",
+            {
+              class: "btn petit",
+              title: "Les deux murs reviennent jusqu'à leur angle d'avant",
+              onclick: () => {
+                defaireArrondi(arcSeul.arc);
+                etat.sel.clear();
+                valider();
+              },
+            },
+            "✕ Enlever l'arrondi (angle vif)"
+          )
+        );
+      }
       if (murs.length > 1 && !objs.length) {
         const eps = [...new Set(murs.map(m => m.ep || d.epaisseur))];
         const ep = h("input", {
@@ -5286,21 +5706,65 @@ async function ouvrirPlan(zone, id, arg) {
           valider();
         });
         bloc.append(
-          h("div", {}, murs.length + " murs"),
+          arcSeul ? "" : h("div", {}, murs.length + " murs"),
           h("label", { class: "champ" }, h("span", {}, "Épaisseur de ces murs (cm)"), ep),
           h("label", { class: "case" }, cote, "Afficher leurs cotes"),
           h("label", { class: "case" }, figes, "🔒 Longueurs figées")
         );
+        // deux murs qui se touchent par un bout : l'angle entre eux, et lequel bouge (A et B marqués sur le plan)
+        const ang = murs.length === 2 && !murs.some(m => m.arc) ? angleDeuxMurs(murs[0], murs[1]) : null;
+        if (ang) {
+          const va = h("input", { type: "number", step: 1, min: 1, max: 179, value: Math.round(ang.deg * 10) / 10, style: "width:80px" });
+          const qui = h(
+            "select",
+            { title: "Le mur qui tourne autour de l'angle (A et B sont marqués sur le plan) ; il garde sa longueur", style: "width:auto" },
+            h("option", { value: "b" }, "le mur B bouge"),
+            h("option", { value: "a" }, "le mur A bouge")
+          );
+          qui.value = etat.murQuiBouge || "b";
+          qui.addEventListener("change", () => {
+            etat.murQuiBouge = qui.value;
+          });
+          va.addEventListener("change", () => {
+            const v = nombre(va.value);
+            if (!(v > 0 && v < 180)) return toast("Un angle entre 1 et 179°.", true);
+            regleAngleDeuxMurs(murs[0], murs[1], v, qui.value);
+          });
+          bloc.append(
+            h(
+              "label",
+              { class: "champ" },
+              h("span", {}, "Angle entre les murs A et B (°)"),
+              h("div", { style: "display:flex;gap:6px;align-items:center;flex-wrap:wrap" }, va, qui)
+            )
+          );
+        } else if (murs.length === 2 && !arcSeul)
+          bloc.append(h("div", { class: "aide" }, "Angle : seulement entre deux murs qui se touchent par un bout."));
+        if (!arcSeul)
+          bloc.append(
+            h(
+              "button",
+              {
+                class: "btn petit",
+                title:
+                  "Chaque mur choisi devient d'équerre (angles à 90°) avec le plus long d'entre eux ; les murs reliés suivent, les longueurs changent un peu si besoin",
+                onclick: () => mettreDEquerre(murs),
+              },
+              "⊾ Tout d'équerre (90°)"
+            )
+          );
       }
       if (murs.length === 1 && !objs.length) {
         const m = murs[0];
+        // (façade : la longueur au bord extérieur, comme sa cote ; mur intérieur : seulement ses cotes intérieures)
+        const facade = coteExterieur(m) !== 0 || !segmentsInterieurs(m).length; // (mur seul : sa longueur)
         const lg = h("input", {
           type: "number",
           step: 1,
-          value: Math.round(dist(m.a, m.b)),
+          value: Math.round(longueurAffichee(m)),
           style: "width:90px",
           disabled: !!m.fige,
-          title: m.fige ? "Longueur figée" : "",
+          title: m.fige ? "Longueur figée" : "Longueur du mur au bord extérieur, comme sa cote",
         });
         const fige = h("input", { type: "checkbox", checked: !!m.fige });
         fige.addEventListener("change", () => {
@@ -5320,7 +5784,7 @@ async function ouvrirPlan(zone, id, arg) {
         });
         lg.addEventListener("change", () => {
           const L = dist(m.a, m.b) || 1,
-            k = nombre(lg.value) / L,
+            k = Math.max(1, nombre(lg.value) - (longueurAffichee(m) - L)) / L,
             fixe = bout.value === "a" ? m.b : m.a,
             bouge = bout.value === "a" ? m.a : m.b;
           deplacerPoint(bouge, { x: fixe.x + (bouge.x - fixe.x) * k, y: fixe.y + (bouge.y - fixe.y) * k });
@@ -5338,27 +5802,110 @@ async function ouvrirPlan(zone, id, arg) {
           m.cote = cote.checked;
           valider();
         });
-        bloc.append(
-          h("div", {}, "Mur"),
-          h(
+        // cotes intérieures de ce mur, tapées ici et gardées 🔒 : une case par face (une seule si les deux faces ont la
+        // même), une par partie si des cloisons en partent
+        const segs = segmentsInterieurs(m);
+        const L0 = dist(m.a, m.b) || 1,
+          ux = (m.b.x - m.a.x) / L0,
+          uy = (m.b.y - m.a.y) / L0;
+        const faces = [1, -1].map(cote => segs.filter(x => x.cote === cote)).filter(l => l.length);
+        const memes =
+          faces.length === 2 &&
+          faces[0].length === faces[1].length &&
+          faces[0].every((x, i) => Math.abs(x.t0 - faces[1][i].t0) < 1 && Math.abs(x.t1 - faces[1][i].t1) < 1);
+        // (face nommée par sa pièce ; sans nom, par sa direction : haut, bas, gauche, droite — un mur penché : la
+        //  direction la plus proche)
+        const nomFace = l => {
+          const sg = l[0],
+            tm = (sg.t0 + sg.t1) / 2,
+            e = (m.ep || d.epaisseur) / 2 + 15,
+            nx = -uy * sg.cote,
+            ny = ux * sg.cote,
+            pc = pieceEn({ x: m.a.x + ux * tm + nx * e, y: m.a.y + uy * tm + ny * e });
+          if (pc && pc.nom) return "côté " + pc.nom;
+          return "côté " + (Math.abs(nx) > Math.abs(ny) ? (nx > 0 ? "droit" : "gauche") : ny > 0 ? "bas" : "haut");
+        };
+        // (bout qui bouge quand on tape une cote intérieure : le même choix que pour la longueur)
+        const boutCote = h(
+          "select",
+          {
+            title: "Le mur qui bouge quand on change une cote intérieure : celui du côté du bout A ou du bout B (marqués sur le plan)",
+            style: "width:auto",
+          },
+          h("option", { value: "" }, "choix automatique"),
+          h("option", { value: "b" }, "côté du bout B bouge"),
+          h("option", { value: "a" }, "côté du bout A bouge")
+        );
+        boutCote.value = etat.boutCote || "";
+        boutCote.addEventListener("change", () => {
+          etat.boutCote = boutCote.value;
+        });
+        const champCote = (sg, lib) => {
+          const v = h("input", { type: "number", step: 1, value: Math.round(sg.longueur), style: "width:90px" });
+          const garde = h("input", { type: "checkbox", checked: !!coteFixee(sg) });
+          v.addEventListener("change", () => {
+            const n = nombre(v.value);
+            if (n > 10) appliquerCoteInterieure(sg, n, garde.checked || !coteFixee(sg), boutCote.value);
+          });
+          garde.addEventListener("change", () => {
+            const cle = cleSegment(sg);
+            d.cotes_fixes = (d.cotes_fixes || []).filter(f => f.cle !== cle);
+            if (garde.checked) d.cotes_fixes.push({ cle, longueur: sg.longueur });
+            valider();
+          });
+          return h(
             "label",
             { class: "champ" },
-            h("span", {}, "Longueur (cm)"),
-            h("div", { style: "display:flex;gap:6px;align-items:center" }, lg, bout)
-          ),
-          h("label", { class: "champ" }, h("span", {}, "Épaisseur (cm)"), ep),
-          h(
-            "label",
-            {
-              class: "case",
-              title:
-                "Le mur garde sa longueur : en bougeant un bout, il tourne autour de l'autre ; les déplacements qui l'allongeraient ou le raccourciraient sont refusés",
-            },
-            fige,
-            "🔒 Longueur figée"
-          ),
-          h("label", { class: "case" }, cote, "Afficher sa cote")
+            h("span", {}, lib),
+            h(
+              "div",
+              { style: "display:flex;gap:6px;align-items:center" },
+              v,
+              h("label", { class: "case", title: "Garder cette cote quand une autre change (🔒 sur le plan)" }, garde, "🔒")
+            )
+          );
+        };
+        const champsCotes = [];
+        (memes ? [faces[0]] : faces).forEach(l =>
+          l.forEach((sg, i) =>
+            champsCotes.push(
+              champCote(
+                sg,
+                (memes || faces.length === 1 ? "Cote intérieure" : "Cote intérieure, " + nomFace(l)) +
+                  (l.length > 1 ? " — partie " + (i + 1) + " en partant de A" : "") +
+                  " (cm)"
+              )
+            )
+          )
         );
+        const morceauxMur = [
+          h("div", {}, coteExterieur(m) !== 0 ? "Mur de façade" : "Mur intérieur"),
+          facade
+            ? h(
+                "label",
+                { class: "champ" },
+                h("span", {}, "Longueur extérieure (cm)"),
+                h("div", { style: "display:flex;gap:6px;align-items:center" }, lg, bout)
+              )
+            : null,
+          ...champsCotes,
+          champsCotes.length ? h("label", { class: "champ" }, h("span", {}, "Quand une cote intérieure change"), boutCote) : null,
+          h("label", { class: "champ" }, h("span", {}, "Épaisseur (cm)"), ep),
+          facade
+            ? h(
+                "label",
+                {
+                  class: "case",
+                  title:
+                    "Le mur garde sa longueur : en bougeant un bout, il tourne autour de l'autre ; les déplacements qui l'allongeraient ou le raccourciraient sont refusés",
+                },
+                fige,
+                "🔒 Longueur figée"
+              )
+            : null,
+          facade ? h("label", { class: "case" }, cote, "Afficher sa cote") : null,
+        ];
+        bloc.append(...morceauxMur.filter(Boolean)); // (append écrirait « null »)
       }
       if (objs.length === 1 && objs[0].genre === "texte") {
         const tx = objs[0];
@@ -5453,12 +6000,18 @@ async function ouvrirPlan(zone, id, arg) {
         if (symb.length === 1) bloc.append(h("div", {}, SYMB[symb[0].type] ? SYMB[symb[0].type].libelle : symb[0].type));
         if (symb.length === 1 && symb[0].type.startsWith("rep_")) {
           const r = REPERES.find(x => x[0] === symb[0].type);
-          const t = h("input", { type: "text", maxlength: 6, value: symb[0].texte ?? (r ? r[1] : ""), style: "width:90px" });
+          const rect = symb[0].type === "rep_rect";
+          const t = h("input", {
+            type: "text",
+            maxlength: rect ? 12 : 6,
+            value: symb[0].texte ?? (r ? r[1] : ""),
+            style: "width:" + (rect ? 130 : 90) + "px",
+          });
           t.addEventListener("change", () => {
             symb[0].texte = t.value.trim();
             valider();
           });
-          bloc.append(h("label", { class: "champ" }, h("span", {}, "Lettres dans le cercle"), t));
+          bloc.append(h("label", { class: "champ" }, h("span", {}, rect ? "Texte dans le rectangle" : "Lettres dans le cercle"), t));
         }
         const selCi = h(
           "select",
@@ -6007,8 +6560,9 @@ async function ouvrirPlan(zone, id, arg) {
           )
         );
       }
-      if (objs.length === 1 && objs[0].type === "boite") {
+      if (objs.length === 1 && prefixeNum(objs[0].type)) {
         const ob = objs[0],
+          px = prefixeNum(ob.type),
           num = h("input", { type: "text", value: ob.num || "", style: "width:90px;font-weight:700" });
         num.addEventListener("change", () => {
           const v = num.value.trim();
@@ -6016,22 +6570,33 @@ async function ouvrirPlan(zone, id, arg) {
           valider();
         });
         bloc.append(
-          h("label", { class: "champ" }, h("span", {}, "Numéro de la boîte"), num),
+          h("label", { class: "champ" }, h("span", {}, ob.type === "boite" ? "Numéro de la boîte" : "Numéro"), num),
           h(
             "button",
             {
               class: "btn petit",
-              title: "B1, B2… de gauche à droite et de haut en bas (ce niveau)",
+              title: px + "1, " + px + "2… de gauche à droite et de haut en bas (ce niveau)",
               onclick: () => {
-                numeroterBoites(true);
+                numeroterAuto(true, ob.type);
                 valider();
               },
             },
-            "Renuméroter les boîtes"
+            "Renuméroter (" + px + "1, " + px + "2…)"
           )
         );
       }
       if (objs.length === 1 && objs[0].genre === "symbole") {
+        const pg = porteGenante(objs[0]);
+        if (pg)
+          bloc.append(
+            h(
+              "div",
+              { class: "plan-alerte" },
+              pg.coulissante === "galandage"
+                ? "⚠ Sur la poche d'une porte à galandage : la porte rentre dans la cloison à cet endroit, pas d'appareillage encastré ici (des deux côtés)."
+                : "⚠ Derrière une porte coulissante en applique : le vantail glisse devant ce morceau de mur, pas d'appareillage ici."
+            )
+          );
         const vol = optPlans().alertes_nfc && volumeDe(objs[0]);
         if (vol)
           bloc.append(
@@ -6189,9 +6754,8 @@ async function ouvrirPlan(zone, id, arg) {
         c.calibre = Number(cal.value);
         valider();
       });
-      const coul = h("input", { type: "color", value: c.couleur, style: "width:30px;height:26px;padding:0" });
-      coul.addEventListener("change", () => {
-        c.couleur = coul.value;
+      const coul = boutonCouleurCircuit(c.couleur, v => {
+        c.couleur = v;
         valider();
       });
       cal.style.width = "72px";
@@ -6343,7 +6907,7 @@ async function ouvrirPlan(zone, id, arg) {
     symbs
       .filter(o => !pcMat || dansPolygone(o, pcMat.pts))
       .forEach(o => {
-        const k = o.type === "rep_libre" || (o.texte !== undefined && o.type.startsWith("rep_")) ? "rep:" + (o.texte || "?") : o.type;
+        const k = cleMateriel(o);
         comptes[k] = (comptes[k] || 0) + 1;
       });
     const sansCircuit = symbs.filter(o => !o.circuit && !["tableau"].includes(o.type)).length;
@@ -6375,7 +6939,8 @@ async function ouvrirPlan(zone, id, arg) {
         h(
           "button",
           { class: "btn petit", title: "Liste du matériel du plan, pièce par pièce, à imprimer", onclick: () => imprimerMateriel() },
-          "🖨 Imprimer"
+          iconeImprimante(),
+          "Imprimer"
         )
       ),
       Object.keys(comptes).length
@@ -6387,14 +6952,7 @@ async function ouvrirPlan(zone, id, arg) {
               {},
               Object.entries(comptes)
                 .sort((a, b) => b[1] - a[1])
-                .map(([t, n]) =>
-                  h(
-                    "tr",
-                    {},
-                    h("td", {}, SYMB[t] ? SYMB[t].libelle : t.startsWith("rep:") ? "Repère « " + t.slice(4) + " »" : t),
-                    h("td", { style: "text-align:right;font-weight:600" }, n)
-                  )
-                )
+                .map(([t, n]) => h("tr", {}, h("td", {}, libMateriel(t)), h("td", { style: "text-align:right;font-weight:600" }, n)))
             )
           )
         : h("p", { class: "sous" }, "Aucun appareil."),
@@ -6496,16 +7054,17 @@ async function ouvrirPlan(zone, id, arg) {
     for (let x = g0x; x < etat.vue.x + l / z; x += 100) gr.append(svgEl("line", { x1: x, y1: etat.vue.y, x2: x, y2: etat.vue.y + ht / z }));
     for (let y = g0y; y < etat.vue.y + ht / z; y += 100) gr.append(svgEl("line", { x1: etat.vue.x, y1: y, x2: etat.vue.x + l / z, y2: y }));
     svg.append(gr);
-    // fond de plan (image ou PDF importé)
-    if (d.fond && d.fond.src && vu("fond"))
+    // fond de plan (image ou PDF importé) ; un niveau sans fond montre celui d'un autre niveau gardé « sur tous les niveaux »
+    const fondVu = d.fond && d.fond.src ? d.fond : fondAutreNiveau();
+    if (fondVu && vu("fond"))
       svg.append(
         svgEl("image", {
-          href: d.fond.src,
-          x: d.fond.x,
-          y: d.fond.y,
-          width: d.fond.l,
-          height: d.fond.h,
-          opacity: d.fond.op ?? 0.5,
+          href: fondVu.src,
+          x: fondVu.x,
+          y: fondVu.y,
+          width: fondVu.l,
+          height: fondVu.h,
+          opacity: fondVu.op ?? 0.5,
           preserveAspectRatio: "none",
           "pointer-events": "none",
           "data-fond": 1,
@@ -6558,7 +7117,7 @@ async function ouvrirPlan(zone, id, arg) {
           y2: m.b.y,
           stroke: s ? "#2563eb" : "#374151",
           "stroke-width": m.ep || d.epaisseur,
-          "stroke-linecap": "square",
+          "stroke-linecap": m.arc ? "round" : "square", // (arrondi : petits murs droits bien jointifs)
           "data-mur": m.id,
         })
       );
@@ -6566,15 +7125,25 @@ async function ouvrirPlan(zone, id, arg) {
     svg.append(gm);
     // cotes des murs
     const gc = svgEl("g", { "font-size": 11 / z, fill: "#6b7280", "text-anchor": "middle" });
-    for (const m of d.murs) {
-      const L = dist(m.a, m.b);
-      if (L < 20 || !coteVisible(m) || !vu("cotes") || !vu("murs")) continue;
+    for (const m0 of d.murs) {
+      const L0 = dist(m0.a, m0.b);
+      if (L0 < 20 || !coteVisible(m0) || !vu("cotes") || !vu("murs")) continue;
+      // (mur de façade : la cote va d'un bord extérieur à l'autre, comme l'encombrement total — pas d'axe à axe)
+      const [ea, eb] = coteExterieur(m0) !== 0 ? prolongementsExterieurs(m0) : [0, 0],
+        ux0 = (m0.b.x - m0.a.x) / L0,
+        uy0 = (m0.b.y - m0.a.y) / L0;
+      const m = {
+          ...m0,
+          a: { x: m0.a.x - ux0 * ea, y: m0.a.y - uy0 * ea },
+          b: { x: m0.b.x + ux0 * eb, y: m0.b.y + uy0 * eb },
+        },
+        L = L0 + ea + eb;
       const mx = (m.a.x + m.b.x) / 2,
         my = (m.a.y + m.b.y) / 2,
         ang = (Math.atan2(m.b.y - m.a.y, m.b.x - m.a.x) * 180) / Math.PI;
       const a2 = ang > 90 || ang < -90 ? ang + 180 : ang;
       // (côté extérieur du mur : la cote ne tombe pas sur un mur ou une cote intérieure ; le texte est sous la ligne de base : un peu plus loin de ce côté)
-      const ce = coteExterieur(m) || -1,
+      const ce = coteExterieur(m0) || -1,
         off = ((m.ep || d.epaisseur) / 2 + (ce * (a2 === ang ? 1 : -1) > 0 ? 18 : 9) / z) * ce;
       const nx = -(m.b.y - m.a.y) / L,
         ny = (m.b.x - m.a.x) / L;
@@ -6607,10 +7176,28 @@ async function ouvrirPlan(zone, id, arg) {
         )
       );
     }
+    // murs arrondis : leur rayon, côté extérieur de l'arc
+    if (vu("cotes") && vu("murs") && !d.cotes_masquees)
+      for (const id of new Set(d.murs.filter(m => m.arc).map(m => m.arc))) {
+        const segs = mursArc(id),
+          m = segs[Math.floor(segs.length / 2)],
+          c = segs[0].coin,
+          mx = (m.a.x + m.b.x) / 2,
+          my = (m.a.y + m.b.y) / 2,
+          l = dist(c, { x: mx, y: my }) || 1,
+          o = (m.ep || d.epaisseur) / 2 + 14 / z;
+        gc.append(
+          svgEl(
+            "text",
+            { x: mx + ((c.x - mx) / l) * o, y: my + ((c.y - my) / l) * o + 4 / z, "data-rayon": id },
+            document.createTextNode("R " + plMetres(segs[0].rayon))
+          )
+        );
+      }
     svg.append(gc);
     // cotes intérieures : de chaque côté d'un mur, une cote par partie de pièce (entre les cloisons qui en partent)
     etat.cotesInt = [];
-    if (d.cotes_interieures && vu("cotes") && vu("murs")) {
+    if (d.cotes_interieures && !d.cotes_masquees && vu("cotes") && vu("murs")) {
       const gi = svgEl("g", { "font-size": 10.5 / z, fill: "#0f766e", "text-anchor": "middle", "font-weight": 600 });
       // (partie identique des deux côtés d'un mur, ex. une cloison : une seule cote, de préférence celle gardée 🔒)
       const uniques = m => {
@@ -6627,8 +7214,46 @@ async function ouvrirPlan(zone, id, arg) {
             )
         );
       };
-      for (const m of d.murs)
-        for (const sg of uniques(m)) {
+      // (deux murs face à face, de la même longueur intérieure — les deux côtés d'une pièce rectangulaire — : une
+      //  seule cote, la gardée 🔒 de préférence, sinon celle du haut ou de gauche)
+      const tous = d.murs.flatMap(m => uniques(m).map(sg => ({ sg, m })));
+      const geo = ({ sg, m }) => {
+        const L = dist(m.a, m.b) || 1,
+          ux = (m.b.x - m.a.x) / L,
+          uy = (m.b.y - m.a.y) / L,
+          tm = (sg.t0 + sg.t1) / 2;
+        return { ux, uy, nx: -uy * sg.cote, ny: ux * sg.cote, cx: m.a.x + ux * tm, cy: m.a.y + uy * tm, m };
+      };
+      const vis = tous.map(geo);
+      const cache = new Set();
+      tous.forEach((x, i) => {
+        if (cache.has(i)) return;
+        const gi = vis[i];
+        tous.forEach((y, j) => {
+          if (j === i || cache.has(j) || y.m === x.m || Math.abs(y.sg.longueur - x.sg.longueur) > 0.5) return;
+          const gj = vis[j];
+          if (gi.nx * gj.nx + gi.ny * gj.ny > -0.99) return; // (pas face à face)
+          const dx = gj.cx - gi.cx,
+            dy = gj.cy - gi.cy;
+          if (dx * gi.nx + dy * gi.ny <= 0) return; // (l'autre n'est pas devant)
+          if (Math.abs(dx * gi.ux + dy * gi.uy) > 1 + Math.max(0, x.sg.longueur * 0.05)) return; // (pas en vis-à-vis)
+          // (pas de mur entre les deux : la même pièce)
+          const r = rayon(
+            { x: gi.cx + gi.nx * ((x.m.ep || d.epaisseur) / 2 + 1), y: gi.cy + gi.ny * ((x.m.ep || d.epaisseur) / 2 + 1) },
+            gi.nx,
+            gi.ny
+          );
+          if (!r || r.mur !== y.m) return;
+          const garderI =
+            !!coteFixee(x.sg) !== !!coteFixee(y.sg)
+              ? !!coteFixee(x.sg)
+              : gi.cy < gj.cy - 0.5 || (Math.abs(gi.cy - gj.cy) <= 0.5 && gi.cx <= gj.cx);
+          cache.add(garderI ? j : i);
+        });
+      });
+      for (const [k, { sg, m }] of tous.entries()) {
+        if (cache.has(k)) continue;
+        {
           const L = dist(m.a, m.b),
             ux = (m.b.x - m.a.x) / L,
             uy = (m.b.y - m.a.y) / L,
@@ -6658,10 +7283,11 @@ async function ouvrirPlan(zone, id, arg) {
             )
           );
         }
+      }
       svg.append(gi);
     }
     // cotes principales : encombrement total (largeur et profondeur, faces extérieures)
-    if (d.cotes === "principales" && d.murs.length && vu("cotes")) {
+    if (d.cotes_principales && !d.cotes_masquees && d.murs.length && vu("cotes")) {
       const ep = m => (m.ep || d.epaisseur) / 2;
       const x0 = Math.min(...d.murs.map(m => Math.min(m.a.x, m.b.x) - ep(m))),
         x1 = Math.max(...d.murs.map(m => Math.max(m.a.x, m.b.x) + ep(m)));
@@ -6730,6 +7356,62 @@ async function ouvrirPlan(zone, id, arg) {
           }),
           svgEl("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke: "transparent", "stroke-width": g.ep })
         );
+      } else if (o.genre === "porte" && o.coulissante) {
+        // porte coulissante : le vantail fermé dans l'ouverture ; à galandage, la poche dans la cloison (pointillé) ; en
+        // applique, le rail le long du mur, sur une face (pointillé)
+        const cote = o.charniere === "d" ? 1 : -1,
+          w2 = o.largeur / 2,
+          P = (k, n) => ({ x: g.c.x + g.ux * k + g.nx * n, y: g.c.y + g.uy * k + g.ny * n }),
+          e = g.ep / 2;
+        if (o.coulissante === "galandage") {
+          const p0 = P(cote * w2, 0),
+            p1 = P(cote * (w2 + o.largeur), 0);
+          const poche = [
+            P(cote * w2, -e * 0.55),
+            P(cote * (w2 + o.largeur), -e * 0.55),
+            P(cote * (w2 + o.largeur), e * 0.55),
+            P(cote * w2, e * 0.55),
+          ];
+          gg.append(
+            svgEl("polygon", {
+              points: poche.map(q => q.x + "," + q.y).join(" "),
+              fill: "#fff",
+              stroke: s,
+              "stroke-width": trait * 0.8,
+              "stroke-dasharray": `${3 / z} ${2 / z}`,
+            }),
+            svgEl("line", {
+              x1: p0.x,
+              y1: p0.y,
+              x2: p1.x,
+              y2: p1.y,
+              stroke: s,
+              "stroke-width": trait * 0.8,
+              "stroke-dasharray": `${3 / z} ${2 / z}`,
+            }),
+            svgEl("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke: s, "stroke-width": 2.5 / z + 1 })
+          );
+        } else {
+          const sens = o.sens || 1,
+            n = sens * (e + 3);
+          const v0 = P(-w2 - 4, n),
+            v1 = P(w2 + 4, n),
+            r0 = P(cote > 0 ? -w2 - 4 : -(w2 + o.largeur + 4), n + sens * 2.5),
+            r1 = P(cote > 0 ? w2 + o.largeur + 4 : w2 + 4, n + sens * 2.5);
+          gg.append(
+            svgEl("line", {
+              x1: r0.x,
+              y1: r0.y,
+              x2: r1.x,
+              y2: r1.y,
+              stroke: s,
+              "stroke-width": trait * 0.8,
+              "stroke-dasharray": `${3 / z} ${2 / z}`,
+            }),
+            svgEl("line", { x1: v0.x, y1: v0.y, x2: v1.x, y2: v1.y, stroke: s, "stroke-width": 2.5 / z + 1 })
+          );
+        }
+        gg.append(svgEl("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke: "transparent", "stroke-width": g.ep }));
       } else if (o.genre === "porte") {
         const sens = o.sens || 1,
           piv = o.charniere === "d" ? b : a,
@@ -7205,7 +7887,7 @@ async function ouvrirPlan(zone, id, arg) {
       });
       g.innerHTML =
         '<rect x="-20" y="-20" width="40" height="40" fill="#fff" fill-opacity="0.01" stroke="none"/>' +
-        (o.texte !== undefined && o.type.startsWith("rep_") ? dessinRepere(o.texte) : dessinTrait(def.dessin));
+        (o.texte !== undefined && o.type.startsWith("rep_") ? dessinRepere(o.texte, o.type === "rep_rect") : dessinTrait(def.dessin));
       if (s)
         g.append(
           svgEl("rect", {
@@ -7221,6 +7903,24 @@ async function ouvrirPlan(zone, id, arg) {
           })
         );
       svg.append(g);
+      if (porteGenante(o))
+        svg.append(
+          svgEl(
+            "text",
+            {
+              x: o.x + TAILLE_SYMBOLE * 0.45,
+              y: o.y - TAILLE_SYMBOLE * 0.45,
+              "font-size": 14 / z,
+              "font-weight": 700,
+              fill: "#c2410c",
+              stroke: "#fff",
+              "stroke-width": 3 / z,
+              "paint-order": "stroke",
+              "pointer-events": "none",
+            },
+            document.createTextNode("⚠ porte")
+          )
+        );
       const vol = optPlans().alertes_nfc && volumeDe(o);
       if (vol)
         svg.append(
@@ -7240,8 +7940,8 @@ async function ouvrirPlan(zone, id, arg) {
             document.createTextNode("⚠ V" + vol.v)
           )
         );
-      if ((o.type === "boite" || o.type === "tableau") && o.num) {
-        // numéro de la boîte (B1…), nom de l'armoire (TGBT…)
+      if ((o.type === "tableau" || prefixeNum(o.type)) && o.num) {
+        // numéro automatique (boîte B1…, autres symboles choisis dans les options), nom de l'armoire (TGBT…)
         const fs = etat.imp ? etat.imp.texteCm * 1.15 : TAILLE_SYMBOLE * 0.42;
         svg.append(
           svgEl(
@@ -7456,7 +8156,7 @@ async function ouvrirPlan(zone, id, arg) {
           );
     // extrémités des murs choisis
     for (const m of d.murs)
-      if (etat.sel.has(m.id))
+      if (etat.sel.has(m.id) && !m.arc)
         for (const pt of [m.a, m.b])
           svg.append(
             svgEl("circle", { cx: pt.x, cy: pt.y, r: (etat.tablette ? 13 : 6) / z, fill: "#fff", stroke: "#2563eb", "stroke-width": 2 / z })
@@ -7489,6 +8189,53 @@ async function ouvrirPlan(zone, id, arg) {
           )
         );
       }
+    // outil Arrondi : le 1er mur touché, et son bout
+    const ar1 = etat.outil === "mur" && etat.arrondi1 && murDe(etat.arrondi1.id);
+    if (ar1)
+      svg.append(
+        svgEl("line", {
+          x1: ar1.a.x,
+          y1: ar1.a.y,
+          x2: ar1.b.x,
+          y2: ar1.b.y,
+          stroke: "#f97316",
+          "stroke-width": (ar1.ep || d.epaisseur) + 4 / z,
+          opacity: 0.5,
+          "pointer-events": "none",
+        }),
+        svgEl("circle", {
+          cx: ar1[etat.arrondi1.k].x,
+          cy: ar1[etat.arrondi1.k].y,
+          r: (etat.tablette ? 13 : 7) / z,
+          fill: "#f97316",
+          "pointer-events": "none",
+        })
+      );
+    // deux murs choisis : A et B au milieu de chacun (angle réglé dans le panneau)
+    const deuxMurs = etat.sel.size === 2 && [...etat.sel].map(murDe);
+    if (deuxMurs && deuxMurs.every(Boolean) && !etat.imp)
+      deuxMurs.forEach((m, i) => {
+        const L = dist(m.a, m.b) || 1,
+          nx = -(m.b.y - m.a.y) / L,
+          ny = (m.b.x - m.a.x) / L,
+          o = (m.ep || d.epaisseur) / 2 + 14 / z;
+        svg.append(
+          svgEl(
+            "text",
+            {
+              x: (m.a.x + m.b.x) / 2 + nx * o,
+              y: (m.a.y + m.b.y) / 2 + ny * o + 5 / z,
+              "font-size": 14 / z,
+              "font-weight": 700,
+              fill: "#2563eb",
+              "text-anchor": "middle",
+              "pointer-events": "none",
+              "data-mur-lettre": i ? "B" : "A",
+            },
+            document.createTextNode(i ? "B" : "A")
+          )
+        );
+      });
     // notes à main levée (calque à part)
     if (vu("notes"))
       for (const n of d.notes || []) {
@@ -7985,6 +8732,10 @@ async function ouvrirPlan(zone, id, arg) {
     const prof0 = (def.prof * TAILLE_SYMBOLE) / 40,
       prof = prof0 * (ech || 1);
     const mp = def.pose !== "plafond" ? murProche(pt, 45 + Math.max(0, prof - prof0)) : null;
+    // (collé au mur : l'alignement sur les autres appareils ne joue que le long du mur — sinon un appareil d'une autre
+    //  taille, aligné sur l'axe d'un voisin, se décollait du mur)
+    let collerX = false,
+      collerY = false;
     if (mp) {
       // contre le mur, côté de la souris, tourné vers la pièce
       const m = mp.m,
@@ -7999,6 +8750,8 @@ async function ouvrirPlan(zone, id, arg) {
       rot = ((rot % 360) + 360) % 360;
       if (Math.abs(Math.atan2(m.b.y - m.a.y, m.b.x - m.a.x) % (Math.PI / 2)) > 0.01)
         rot = (Math.atan2(ny * cote, nx * cote) * 180) / Math.PI + 90;
+      collerX = Math.abs(nx) > 0.01; // (mur pas horizontal : x tient la distance au mur)
+      collerY = Math.abs(ny) > 0.01; // (mur pas vertical : y tient la distance au mur)
     } else {
       x = grille(x);
       y = grille(y);
@@ -8013,8 +8766,8 @@ async function ouvrirPlan(zone, id, arg) {
       }
     }
     // plafond : centré dans sa pièce (au milieu entre les murs, dans un sens ou dans les deux)
-    let fixeX = false,
-      fixeY = false;
+    let fixeX = collerX,
+      fixeY = collerY;
     if (def.pose === "plafond") {
       const bx = boitePiece(pt),
         tc = 22 / etat.vue.z;
@@ -8051,6 +8804,279 @@ async function ouvrirPlan(zone, id, arg) {
       }
     }
     return { x, y, rot, guides };
+  }
+  /* -- murs arrondis : deux murs droits raccordés par un arc de cercle, tangent aux deux (comme un « congé » de DAO).
+   *  L'arc est une suite de petits murs droits (6° chacun) : pièces, cotes, appareils posés contre lui marchent comme
+   *  pour les autres murs. Chacun garde arc (son groupe), rayon, coin (l'angle d'avant) et arcMurs (les deux murs raccordés). */
+  /** deux murs parallèles (bouts tournés du même côté) : leur écart ; sinon null */
+  function ecartParalleles(m1, k1, m2, k2) {
+    const e1 = m1[k1],
+      f1 = m1[k1 === "a" ? "b" : "a"],
+      e2 = m2[k2],
+      f2 = m2[k2 === "a" ? "b" : "a"];
+    const l1 = dist(e1, f1) || 1,
+      l2 = dist(e2, f2) || 1,
+      u1 = { x: (e1.x - f1.x) / l1, y: (e1.y - f1.y) / l1 },
+      u2 = { x: (e2.x - f2.x) / l2, y: (e2.y - f2.y) / l2 };
+    if (Math.abs(u1.x * u2.y - u1.y * u2.x) > 0.035) return null; // (plus de 2° d'écart : pas parallèles)
+    return { u1, u2, meme: u1.x * u2.x + u1.y * u2.y > 0, w: Math.abs((e2.x - e1.x) * u1.y - (e2.y - e1.y) * u1.x) };
+  }
+  function creerArrondi(m1, k1, m2, k2, R) {
+    const f1 = m1[k1 === "a" ? "b" : "a"],
+      f2 = m2[k2 === "a" ? "b" : "a"];
+    let T1, T2, C, bal, retour, vers;
+    const par = ecartParalleles(m1, k1, m2, k2);
+    if (par) {
+      // murs parallèles, bouts du même côté : un arc de l'un à l'autre (demi-cercle au rayon le plus petit, plus plat
+      // au-delà) ; le mur le plus court est prolongé pour que les deux bouts soient face à face
+      if (!par.meme) return "Les deux bouts se font face : choisissez les bouts tournés du même côté.";
+      if (par.w < 5) return "Les deux murs sont dans le prolongement l'un de l'autre.";
+      const u = par.u1,
+        e1 = m1[k1],
+        e2 = m2[k2],
+        s = (e2.x - e1.x) * u.x + (e2.y - e1.y) * u.y;
+      if (R < par.w / 2 - 0.5) return "Rayon trop petit : " + Math.ceil(par.w / 2) + " cm au moins (demi-cercle).";
+      R = Math.max(R, par.w / 2);
+      T1 = s > 0 ? { x: e1.x + u.x * s, y: e1.y + u.y * s } : { x: e1.x, y: e1.y };
+      T2 = s < 0 ? { x: e2.x - u.x * s, y: e2.y - u.y * s } : { x: e2.x, y: e2.y };
+      const mi = { x: (T1.x + T2.x) / 2, y: (T1.y + T2.y) / 2 },
+        recul = Math.sqrt(Math.max(0, R * R - (par.w / 2) ** 2));
+      C = { x: mi.x - u.x * recul, y: mi.y - u.y * recul };
+      const th1 = Math.atan2(T1.y - C.y, T1.x - C.x);
+      bal = Math.atan2(T2.y - C.y, T2.x - C.x) - th1;
+      while (bal > Math.PI) bal -= 2 * Math.PI;
+      while (bal < -Math.PI) bal += 2 * Math.PI;
+      // (l'arc passe du côté où vont les murs)
+      const am = th1 + bal / 2;
+      if (Math.cos(am) * u.x + Math.sin(am) * u.y < 0) bal = bal > 0 ? bal - 2 * Math.PI : bal + 2 * Math.PI;
+      retour = [
+        { x: e1.x, y: e1.y },
+        { x: e2.x, y: e2.y },
+      ];
+      vers = { x: mi.x + u.x * (R + 100), y: mi.y + u.y * (R + 100) };
+    } else {
+      const d1 = { x: m1[k1].x - f1.x, y: m1[k1].y - f1.y },
+        d2 = { x: m2[k2].x - f2.x, y: m2[k2].y - f2.y };
+      const den = d1.x * d2.y - d1.y * d2.x;
+      const s1 = ((f2.x - f1.x) * d2.y - (f2.y - f1.y) * d2.x) / den,
+        I = { x: f1.x + d1.x * s1, y: f1.y + d1.y * s1 }; // (coin : là où les deux murs se croisent, prolongés au besoin)
+      const l1 = dist(I, f1),
+        l2 = dist(I, f2);
+      if (l1 < 2 || l2 < 2) return "Choisissez les bouts des murs qui vont vers l'angle.";
+      const u1 = { x: (f1.x - I.x) / l1, y: (f1.y - I.y) / l1 },
+        u2 = { x: (f2.x - I.x) / l2, y: (f2.y - I.y) / l2 };
+      const phi = Math.acos(Math.max(-1, Math.min(1, u1.x * u2.x + u1.y * u2.y)));
+      if (phi < 0.02 || phi > Math.PI - 0.02) return "Les deux murs sont dans le prolongement l'un de l'autre.";
+      const t = R / Math.tan(phi / 2),
+        maxi = Math.floor(Math.min(l1, l2) * Math.tan(phi / 2) - 1);
+      if (t > Math.min(l1, l2) - 1) return "Rayon trop grand pour ces murs (" + Math.max(0, maxi) + " cm au plus).";
+      T1 = { x: I.x + u1.x * t, y: I.y + u1.y * t };
+      T2 = { x: I.x + u2.x * t, y: I.y + u2.y * t };
+      const bl = Math.hypot(u1.x + u2.x, u1.y + u2.y) || 1,
+        hc = R / Math.sin(phi / 2);
+      C = { x: I.x + ((u1.x + u2.x) / bl) * hc, y: I.y + ((u1.y + u2.y) / bl) * hc };
+      const th1 = Math.atan2(T1.y - C.y, T1.x - C.x);
+      bal = Math.atan2(T2.y - C.y, T2.x - C.x) - th1;
+      while (bal > Math.PI) bal -= 2 * Math.PI;
+      while (bal < -Math.PI) bal += 2 * Math.PI;
+      retour = [
+        { x: I.x, y: I.y },
+        { x: I.x, y: I.y },
+      ];
+      vers = { x: I.x, y: I.y };
+    }
+    const th1 = Math.atan2(T1.y - C.y, T1.x - C.x);
+    const n = Math.max(4, Math.ceil(Math.abs(bal) / ((6 * Math.PI) / 180)));
+    // (portes et fenêtres des deux murs : à la même place, le mur raccourci)
+    const garder = m =>
+      d.ouvertures.filter(o => o.mur === m.id).map(o => ({ o, p: { x: m.a.x + (m.b.x - m.a.x) * o.t, y: m.a.y + (m.b.y - m.a.y) * o.t } }));
+    const ouv = [...garder(m1).map(x => [m1, x]), ...garder(m2).map(x => [m2, x])];
+    m1[k1] = { x: T1.x, y: T1.y };
+    m2[k2] = { x: T2.x, y: T2.y };
+    for (const [m, { o, p }] of ouv) {
+      const L2 = (m.b.x - m.a.x) ** 2 + (m.b.y - m.a.y) ** 2 || 1;
+      o.t = Math.max(0, Math.min(1, ((p.x - m.a.x) * (m.b.x - m.a.x) + (p.y - m.a.y) * (m.b.y - m.a.y)) / L2));
+    }
+    const id = plId(),
+      pts = [];
+    for (let i = 0; i <= n; i++) {
+      const a = th1 + (bal * i) / n;
+      pts.push(i === 0 ? T1 : i === n ? T2 : { x: C.x + Math.cos(a) * R, y: C.y + Math.sin(a) * R });
+    }
+    for (let i = 0; i < n; i++)
+      d.murs.push({
+        id: plId(),
+        a: { x: pts[i].x, y: pts[i].y },
+        b: { x: pts[i + 1].x, y: pts[i + 1].y },
+        ep: m1.ep || undefined,
+        arc: id,
+        rayon: R,
+        coin: vers, // (côté où écrire le rayon : l'angle d'avant, ou l'extérieur du demi-cercle)
+        retour, // (là où reviennent les bouts des deux murs si on enlève l'arrondi)
+        arcMurs: [m1.id, m2.id],
+      });
+    return id;
+  }
+  const mursArc = id => d.murs.filter(m => m.arc === id);
+  /** enlever l'arrondi : les deux murs revont jusqu'à leur angle d'avant ; renvoie ces deux murs et leurs bouts */
+  function defaireArrondi(id) {
+    const segs = mursArc(id);
+    if (!segs.length) return null;
+    const retour = segs[0].retour || [segs[0].coin, segs[0].coin],
+      debut = segs[0].a,
+      fin = segs[segs.length - 1].b;
+    const res = [];
+    for (const [mid, p, coin] of [
+      [segs[0].arcMurs[0], debut, retour[0]],
+      [segs[0].arcMurs[1], fin, retour[1]],
+    ]) {
+      const m = murDe(mid);
+      if (!m) continue;
+      const k = dist(m.a, p) <= dist(m.b, p) ? "a" : "b";
+      const ouv = d.ouvertures
+        .filter(o => o.mur === m.id)
+        .map(o => ({ o, p: { x: m.a.x + (m.b.x - m.a.x) * o.t, y: m.a.y + (m.b.y - m.a.y) * o.t } }));
+      m[k] = { x: coin.x, y: coin.y };
+      for (const { o, p: q } of ouv) {
+        const L2 = (m.b.x - m.a.x) ** 2 + (m.b.y - m.a.y) ** 2 || 1;
+        o.t = Math.max(0, Math.min(1, ((q.x - m.a.x) * (m.b.x - m.a.x) + (q.y - m.a.y) * (m.b.y - m.a.y)) / L2));
+      }
+      res.push([m, k]);
+    }
+    const ids = new Set(segs.map(m => m.id));
+    d.murs = d.murs.filter(m => !ids.has(m.id));
+    d.ouvertures = d.ouvertures.filter(o => !ids.has(o.mur));
+    return res.length === 2 ? res : null;
+  }
+  /** nouveau rayon d'un arrondi (0 : angle vif) */
+  function changerRayon(id, R) {
+    const segs = mursArc(id);
+    if (!segs.length) return;
+    const R0 = segs[0].rayon,
+      murs = defaireArrondi(id);
+    if (murs && R > 0) {
+      const r = creerArrondi(murs[0][0], murs[0][1], murs[1][0], murs[1][1], R);
+      if (!d.murs.some(m => m.arc === r)) {
+        toast(r, true);
+        creerArrondi(murs[0][0], murs[0][1], murs[1][0], murs[1][1], R0);
+      }
+    }
+    etat.sel = new Set(
+      d.murs.filter(m => m.arc && murs && m.arcMurs && m.arcMurs[0] === murs[0][0].id && m.arcMurs[1] === murs[1][0].id).map(m => m.id)
+    );
+    valider();
+  }
+  /** outil Mur, mode arrondi : un appui près du bout du 1er mur, puis du 2e ; le rayon est demandé */
+  async function clicArrondi(pt) {
+    let best = null;
+    for (const m of d.murs) {
+      if (m.arc) continue;
+      const L2 = (m.b.x - m.a.x) ** 2 + (m.b.y - m.a.y) ** 2 || 1,
+        t = Math.max(0, Math.min(1, ((pt.x - m.a.x) * (m.b.x - m.a.x) + (pt.y - m.a.y) * (m.b.y - m.a.y)) / L2)),
+        dd = dist(pt, { x: m.a.x + (m.b.x - m.a.x) * t, y: m.a.y + (m.b.y - m.a.y) * t });
+      if (dd < Math.max((m.ep || d.epaisseur) / 2 + 10, (etat.tablette ? 30 : 14) / etat.vue.z) && (!best || dd < best.d))
+        best = { m, d: dd, k: dist(pt, m.a) <= dist(pt, m.b) ? "a" : "b" };
+    }
+    if (!best) return toast("Touchez un mur droit, sur sa moitié du côté de l'arrondi.", true);
+    const a1 = etat.arrondi1 && murDe(etat.arrondi1.id);
+    if (!a1 || a1 === best.m) {
+      etat.arrondi1 = { id: best.m.id, k: best.k };
+      dessiner();
+      return toast("Touchez maintenant le 2e mur, sur sa moitié du côté de l'arrondi.");
+    }
+    const k1 = etat.arrondi1.k;
+    etat.arrondi1 = null;
+    dessiner();
+    const par = ecartParalleles(a1, k1, best.m, best.k);
+    const mini = par && par.meme ? Math.ceil(par.w / 2) : 0;
+    const v = await demanderTexte(
+      mini ? "Rayon de l'arc (cm) : " + mini + " pour un demi-cercle, plus pour un arc plus plat :" : "Rayon de l'arrondi (cm) :",
+      String(mini || etat.rayonArrondi || 100)
+    );
+    const R = nombre(v || "");
+    if (!(R > 0)) return;
+    if (!mini) etat.rayonArrondi = R;
+    const r = creerArrondi(a1, k1, best.m, best.k, R);
+    if (!d.murs.some(m => m.arc === r)) return toast(r, true);
+    valider();
+  }
+  /** deux murs qui se touchent par un bout : le point commun, les deux autres bouts et l'angle entre eux (°) */
+  function angleDeuxMurs(m1, m2) {
+    for (const k1 of ["a", "b"])
+      for (const k2 of ["a", "b"])
+        if (dist(m1[k1], m2[k2]) < 0.5) {
+          const c = m1[k1],
+            p1 = m1[k1 === "a" ? "b" : "a"],
+            p2 = m2[k2 === "a" ? "b" : "a"];
+          const a1 = Math.atan2(p1.y - c.y, p1.x - c.x),
+            a2 = Math.atan2(p2.y - c.y, p2.x - c.x);
+          let da = a2 - a1;
+          while (da > Math.PI) da -= 2 * Math.PI;
+          while (da < -Math.PI) da += 2 * Math.PI;
+          return { c, p1, p2, a1, a2, sens: da >= 0 ? 1 : -1, deg: (Math.abs(da) * 180) / Math.PI };
+        }
+    return null;
+  }
+  /** angle entre deux murs : le mur qui bouge (« a » : le 1er, « b » : le 2e) tourne autour du point commun, même longueur */
+  function regleAngleDeuxMurs(m1, m2, deg, qui) {
+    const g = angleDeuxMurs(m1, m2);
+    if (!g) return;
+    const recoller = retenirCollage(null, null);
+    const r = (deg * Math.PI) / 180;
+    const [fixe, bouge, sens] = qui === "a" ? [g.a2, g.p1, -g.sens] : [g.a1, g.p2, g.sens],
+      L = dist(g.c, bouge),
+      an = fixe + sens * r;
+    deplacerPoint(bouge, { x: g.c.x + Math.cos(an) * L, y: g.c.y + Math.sin(an) * L });
+    recoller();
+    valider();
+  }
+  /** les murs choisis d'équerre avec le plus long d'entre eux (0°, 90°, 180°, 270°) : de proche en proche à partir de lui,
+   *  chaque mur garde le bout déjà réglé et son autre bout vient sur l'équerre (les murs reliés suivent) */
+  function mettreDEquerre(murs) {
+    const droits = murs.filter(m => !m.arc && dist(m.a, m.b) > 1);
+    if (!droits.length) return;
+    const recoller = retenirCollage(null, null);
+    const ref = droits.reduce((x, y) => (dist(y.a, y.b) > dist(x.a, x.b) ? y : x));
+    const al = Math.atan2(ref.b.y - ref.a.y, ref.b.x - ref.a.x);
+    const fixes = [];
+    const estFixe = p => fixes.some(f => dist(f, p) < 0.5);
+    const fixer = p => fixes.push({ x: p.x, y: p.y });
+    const reste = new Set(droits);
+    const regler = (m, k) => {
+      // (k : le bout déjà en place)
+      const p = m[k],
+        q = m[k === "a" ? "b" : "a"];
+      const a = Math.atan2(q.y - p.y, q.x - p.x),
+        an = al + (Math.round((a - al) / (Math.PI / 2)) * Math.PI) / 2,
+        ux = Math.cos(an),
+        uy = Math.sin(an),
+        l = (q.x - p.x) * ux + (q.y - p.y) * uy;
+      deplacerPoint(q, { x: p.x + ux * l, y: p.y + uy * l });
+      fixer(q);
+    };
+    while (reste.size) {
+      let avance = false;
+      for (const m of [...reste]) {
+        const fa = estFixe(m.a),
+          fb = estFixe(m.b);
+        if (fa && fb) reste.delete(m);
+        else if (fa || fb) {
+          regler(m, fa ? "a" : "b");
+          reste.delete(m);
+          avance = true;
+        }
+      }
+      if (!avance && reste.size) {
+        // (départ : le mur de référence, ou le plus long d'un groupe à part)
+        const m = reste.has(ref) ? ref : [...reste].reduce((x, y) => (dist(y.a, y.b) > dist(x.a, x.b) ? y : x));
+        fixer(m.a);
+        regler(m, "a");
+        reste.delete(m);
+      }
+    }
+    recoller();
+    valider();
+    toast("Murs mis d'équerre.");
   }
   function deplacerPoint(ancien, nouveau) {
     // un point partagé par plusieurs murs bouge partout
@@ -8096,6 +9122,11 @@ async function ouvrirPlan(zone, id, arg) {
       if (!t) return;
       ob.texte = etat.dernierRepere = t.trim().slice(0, 6);
     }
+    if (etat.symbole === "rep_rect") {
+      const t = await demanderTexte("Texte dans le rectangle (ex. POMPE, PORTAIL, SPA) :", etat.dernierRect || "");
+      if (!t) return;
+      ob.texte = etat.dernierRect = t.trim().slice(0, 12);
+    }
     // (traversée : la même sur le niveau du dessus ; sans niveau au-dessus : arrivée des combles, par le plafond)
     if (ob.type === "traversee" && !(rangNiveau(d.niveau) < (d.niveaux || []).length - 1 && jumelerTraversee(ob))) ob.cote = "plafond";
     d.objets.push(ob);
@@ -8123,7 +9154,7 @@ async function ouvrirPlan(zone, id, arg) {
       "Appareils",
       ["lave_linge", "seche_linge", "lave_vaisselle", "four", "cuisiniere", "micro_ondes", "refrigerateur", "congelateur", "borne_ve"],
     ],
-    ["radiateur", "Chauffage", ["radiateur", "seche_serviettes", "chauffe_eau", "vmc"]],
+    ["radiateur", "Chauffage", ["radiateur", "seche_serviettes", "chauffe_eau", "clim_int", "clim_ext", "vmc"]],
     ["tableau", "Divers", ["tableau", "traversee", "daaf", "sonnette", "volet", "compteur"]],
     ["@liaison", "Liaison, gaine", ["@liaison", "@gaine", "@moulure", "@texte"]],
   ];
@@ -8700,10 +9731,14 @@ async function ouvrirPlan(zone, id, arg) {
       if (d.fond) geste = { genre: "fond", depart: pt, x0: d.fond.x, y0: d.fond.y };
       return;
     }
+    if (o === "mur" && etat.genreMur === "arrondi") {
+      clicArrondi(pt);
+      return;
+    }
     if (o === "mur") {
       let q = accrocherPoint(pt);
       if (etat.mur) {
-        q = contraindre(etat.mur, q, e.shiftKey);
+        q = contraindre(etat.mur, q, e.shiftKey || etat.tabMaj); // (Maj, ou « ⇧ Maj » sur tablette : angle libre)
         const a2 = accrocherPoint(q);
         if (a2.accroche) q = a2;
         if (dist(etat.mur, q) > 2) {
@@ -8761,15 +9796,17 @@ async function ouvrirPlan(zone, id, arg) {
         toast("Cliquez sur un mur.", true);
         return;
       }
+      const gp = o === "porte" ? etat.genrePorte || "porte" : o;
       const ouv = {
         id: plId(),
-        genre: o === "porte" ? etat.genrePorte || "porte" : o,
+        genre: gp === "galandage" || gp === "applique" ? "porte" : gp,
         mur: mp.m.id,
         t: mp.t,
         largeur: o === "porte" ? optPlans().largeur_porte : optPlans().largeur_fenetre,
         sens: 1,
         charniere: "g",
       };
+      if (gp === "galandage" || gp === "applique") ouv.coulissante = gp;
       d.ouvertures.push(ouv);
       etat.sel = new Set([ouv.id]);
       choisirOutil("selection");
@@ -8963,7 +10000,7 @@ async function ouvrirPlan(zone, id, arg) {
       }
     // extrémité d'un mur choisi ?
     for (const m of d.murs)
-      if (etat.sel.has(m.id))
+      if (etat.sel.has(m.id) && !m.arc)
         for (const k of ["a", "b"])
           if (dist(m[k], pt) < (etat.tablette ? 24 : 9) / etat.vue.z) {
             geste = { genre: "point", depart: { x: m[k].x, y: m[k].y }, courant: { x: m[k].x, y: m[k].y }, fixe: m[k === "a" ? "b" : "a"] };
@@ -8981,6 +10018,9 @@ async function ouvrirPlan(zone, id, arg) {
       if (e.shiftKey || e.ctrlKey || e.metaKey || etat.tabMaj) {
         etat.sel.has(c.id) ? etat.sel.delete(c.id) : etat.sel.add(c.id);
       } else if (!etat.sel.has(c.id)) etat.sel = new Set([c.id]);
+      // (un morceau de mur arrondi : tout l'arrondi)
+      const mArc = c.genre === "mur" && murDe(c.id);
+      if (mArc && mArc.arc) for (const m of mursArc(mArc.arc)) etat.sel[etat.sel.has(c.id) ? "add" : "delete"](m.id);
       geste = { genre: "deplacer", depart: pt, bouge: false, cible: c, base: JSON.parse(instantane()) };
     } else {
       if (!e.shiftKey && !e.ctrlKey && !e.metaKey && !etat.tabMaj) etat.sel.clear();
@@ -9130,7 +10170,7 @@ async function ouvrirPlan(zone, id, arg) {
     }
     if (geste && geste.genre === "point") {
       let q = accrocherPoint(pt, [geste.courant]);
-      if (!e.shiftKey && !q.accroche) q = contraindre(geste.fixe, q, false);
+      if (!e.shiftKey && !etat.tabMaj && !q.accroche) q = contraindre(geste.fixe, q, false);
       const pareil = (a, b) => Math.abs(a.x - b.x) < 0.01 && Math.abs(a.y - b.y) < 0.01;
       const figes = d.murs.filter(m => m.fige && (pareil(m.a, geste.courant) || pareil(m.b, geste.courant)));
       if (figes.length) {
@@ -9459,10 +10499,10 @@ async function ouvrirPlan(zone, id, arg) {
       return;
     }
     // aperçus des outils
-    if (etat.outil === "mur") {
+    if (etat.outil === "mur" && etat.genreMur !== "arrondi") {
       let q = accrocherPoint(pt);
       if (etat.mur) {
-        q = contraindre(etat.mur, q, e.shiftKey);
+        q = contraindre(etat.mur, q, e.shiftKey || etat.tabMaj); // (Maj, ou « ⇧ Maj » sur tablette : angle libre)
         const a2 = accrocherPoint(q);
         if (a2.accroche) q = a2;
       }
@@ -9811,6 +10851,23 @@ async function ouvrirPlan(zone, id, arg) {
     "thermostat",
   ]);
   /** volume de salle d'eau où tombe un appareil : { v: 1 | 2, nom } ou null */
+  /** appareil posé là où glisse une porte coulissante : dans la poche d'une porte à galandage (les deux faces de la
+   *  cloison), ou derrière le vantail d'une porte en applique (sur sa face du mur) */
+  function porteGenante(o) {
+    if (!o || o.genre !== "symbole" || estDecor(o)) return null;
+    for (const p of d.ouvertures) {
+      if (p.genre !== "porte" || !p.coulissante) continue;
+      const g = geomOuverture(p);
+      if (!g) continue;
+      const cote = p.charniere === "d" ? 1 : -1,
+        du = ((o.x - g.c.x) * g.ux + (o.y - g.c.y) * g.uy) * cote,
+        dn = (o.x - g.c.x) * g.nx + (o.y - g.c.y) * g.ny;
+      if (du < p.largeur / 2 - 2 || du > p.largeur * 1.5 + 4 || Math.abs(dn) > g.ep / 2 + 30) continue;
+      if (p.coulissante === "applique" && dn * (p.sens || 1) < 0) continue;
+      return p;
+    }
+    return null;
+  }
   function volumeDe(o) {
     if (!o || estDecor(o) || !SOUMIS_VOLUMES.has(o.type) || hauteurDe(o) >= 225) return null;
     let res = null;
@@ -10797,6 +11854,7 @@ async function ouvrirPlan(zone, id, arg) {
     [/^(volet|cmd_volet)$|^VR$/, "swb_volet.svg", "Volet"],
     [/^seche_serviettes$|^SS$/, "swb_twldryer.svg", "Chauffage"],
     [/^radiateur$|^RAD$/, "swb_chauffage.svg", "Chauffage"],
+    [/^(clim_int|clim_ext)$|^CLIM$/, "swb_froid.svg", "Climatisation"],
     [/^exterieur$/, "swb_eclext.svg", "Eclairage"],
     [/^(dcl|point|applique|spot|reglette|projecteur|baes)$/, "swb_ecl.svg", "Eclairage"],
     [/^(prise|prise2|prise_cmd|prise_etanche)$|^PC$/, "swb_pc.svg", "Prises"],
@@ -10885,120 +11943,10 @@ async function ouvrirPlan(zone, id, arg) {
     groupes.forEach(g => g.l.sort((a, b) => ordre(a) - ordre(b)));
     return [...groupes, ...bornes];
   }
-  /** projet du module Tableaux : une rangée par interrupteur différentiel 30 mA */
-  function projetTableau(lignes, nomTableau, filles, cpt) {
-    const MOD = {
-      id: "",
-      icon: null,
-      text: "",
-      desc: "",
-      func: "",
-      type: "",
-      crb: "",
-      modtype: "",
-      current: "",
-      vref: "230V",
-      sensibility: "",
-      coef: 0.5,
-      pole: "",
-      wire: "",
-      line: "",
-      grp: "",
-      parentId: "",
-      srcId: "",
-      kcId: "",
-      kcType: "NO",
-      kcOrder: "after",
-      partialKc: false,
-      onlyChilds: true,
-      noAutoId: false,
-      free: true,
-      span: 1,
-      half: "none",
-    };
-    const PAS = 13,
-      groupes = repartirDifferentiels(lignes).filter(g => g.l.length);
-    // (repères Q1, Q2… dans l'ordre du tableau, de gauche à droite ; les circuits du plan les reprennent ensuite)
-    cpt = cpt || { n: 0, reps: new Map() };
-    let nq = cpt.n;
-    const tete = [];
-    if ((filles || []).length) {
-      // (alimentation des armoires divisionnaires : un disjoncteur par armoire, « → nom » dans sa description)
-      let r = [];
-      for (const f of filles) {
-        r.push({
-          ...MOD,
-          id: "Q" + ++nq,
-          free: false,
-          func: "q",
-          crb: "C",
-          current: (f.alim_cal || 32) + "A",
-          pole: "1P+N",
-          wire: String(f.alim_sec || "10").replace(",", "."),
-          coef: 1,
-          text: "Alim " + nomArmoire(f),
-          desc: "→ " + nomArmoire(f),
-        });
-        f._depart = "Q" + nq;
-        if (r.length === PAS) {
-          tete.push(r);
-          r = [];
-        }
-      }
-      if (r.length) {
-        for (let i = r.length; i < PAS; i++) r.push({ ...MOD });
-        tete.push(r);
-      }
-    }
-    const rows = groupes.map((g, k) => {
-      const id = "ID" + (k + 1),
-        rangee = [
-          {
-            ...MOD,
-            id,
-            free: false,
-            func: "id",
-            icon: "swb_differential-circuit-breaker.svg",
-            modtype: "Alim",
-            text: g.irve ? "Différentiel borne" : "Différentiel " + (g.typeA ? "type A" : "type AC"),
-            desc: g.irve ? "Type selon la notice de la borne (A, F ou B)" : "",
-            type: g.typeA ? "A" : "AC",
-            sensibility: "30mA",
-            current: "40A",
-            pole: "1P+N",
-            coef: 1,
-            span: 2,
-          },
-        ];
-      for (const x of g.l)
-        rangee.push({
-          ...MOD,
-          id: (cpt.reps.set(x.c.id, "Q" + ++nq), "Q" + nq),
-          free: false,
-          func: "q",
-          crb: "C",
-          current: x.cal + "A",
-          pole: "1P+N",
-          wire: String(x.sec),
-          parentId: id,
-          icon: x.icone,
-          modtype: x.modtype,
-          text: x.nom,
-          desc: [x.note || x.pieces.join(", "), x.recepteurs].filter(Boolean).join(" · "),
-        });
-      const pris = rangee.reduce((t, m) => t + m.span, 0);
-      for (let i = pris; i < PAS; i++) rangee.push({ ...MOD });
-      return rangee;
-    });
-    rows.unshift(...tete);
-    cpt.n = nq;
-    while (rows.length < 2) rows.push(Array.from({ length: PAS }, () => ({ ...MOD })));
-    return { prjname: nomTableau, projectType: "R", stepsPerRows: PAS, rows };
-  }
-  /** étiquettes de tableau (module maison) d'après les circuits : un différentiel puis ses départs, rangés comme pour
+  /** tableau électrique (étiquettes) d'après les circuits : un différentiel puis ses départs, rangés comme pour
    *  le tableau (8 circuits au plus par différentiel) ; une rangée par différentiel tant qu'elle tient. Plusieurs
    *  armoires dans le plan : un tableau par armoire, l'armoire mère avec un départ « Alim … » pour chacune, reliés en
-   *  installation (synoptique). Comme pour Tiquettes : aperçu, puis nouveau tableau ou remplacement du précédent. */
+   *  installation (synoptique). Aperçu, puis nouveau tableau ou remplacement du précédent. */
   /** les circuits du plan prennent les repères du tableau (Q1, Q2… de gauche à droite) et son ordre */
   function repsDuTableau(cpt) {
     for (const c of d.circuits) if (cpt.reps.has(c.id)) c.rep = cpt.reps.get(c.id);
@@ -11212,7 +12160,7 @@ async function ouvrirPlan(zone, id, arg) {
       }
     else lignes.forEach(x => corps.append(ligne(x)));
     ouvrirModale(
-      plusieurs ? "Plan → tableaux, module maison (" + ts.length + " armoires)" : "Plan → tableau, module maison",
+      plusieurs ? "Plan → tableaux (" + ts.length + " armoires)" : "Plan → tableau électrique",
       h(
         "div",
         { class: "pile" },
@@ -11256,7 +12204,10 @@ async function ouvrirPlan(zone, id, arg) {
                 const remplacer = choix.value === "remplacer";
                 if (
                   remplacer &&
-                  !(await demanderOui("Remplacer les étiquettes par celles du plan ? (ce qui y a été fait à la main sera perdu)"))
+                  !(await demanderOui(
+                    (plusieurs ? "Remplacer les tableaux" : "Remplacer le tableau") +
+                      " par ce que donne le plan ? Ce qui y a été fait à la main (textes, couleurs, appareils ajoutés…) sera perdu."
+                  ))
                 )
                   return;
                 const base = {
@@ -11337,320 +12288,6 @@ async function ouvrirPlan(zone, id, arg) {
       { largeur: "min(760px, 96vw)" }
     );
   }
-  async function versTableau() {
-    if (tableauxPlan().length > 1) return versTableaux();
-    const lignes = circuitsTableau(),
-      groupes = repartirDifferentiels(lignes).filter(g => g.l.length);
-    const idDe = x => {
-      const k = groupes.findIndex(g => g.l.includes(x));
-      return k < 0
-        ? ""
-        : "ID" +
-            (k + 1) +
-            " · 30 mA " +
-            (groupes[k].irve ? "à elle seule (type selon la borne)" : "type " + (groupes[k].typeA ? "A" : "AC"));
-    };
-    if (!lignes.length) {
-      toast("Aucun circuit dans ce plan.", true);
-      return;
-    }
-    const deja = d.tableau_id ? await api("GET", "/api/plans/" + d.tableau_id).catch(() => null) : null;
-    const nomT = h("input", { type: "text", value: (deja && deja.nom) || "Tableau — " + (nom.value || "Plan"), style: "width:100%" });
-    const choix = h(
-      "select",
-      {},
-      deja ? h("option", { value: "remplacer" }, "Remplacer le contenu du tableau « " + (deja.nom || "Tableau") + " »") : null,
-      h("option", { value: "nouveau" }, "Nouveau tableau")
-    );
-    const tab = h(
-      "table",
-      { class: "resultats" },
-      h(
-        "thead",
-        {},
-        h(
-          "tr",
-          {},
-          ["", "Circuit du plan", "Étiquette", "Pièces", "Disj.", "Section", "Différentiel"].map(t => h("th", {}, t))
-        )
-      ),
-      h(
-        "tbody",
-        {},
-        lignes.map(x =>
-          h(
-            "tr",
-            {},
-            h("td", {}, h("b", {}, x.rep)),
-            h("td", {}, x.circuit || "—"),
-            h("td", {}, x.nom),
-            h("td", { class: "sous" }, x.pieces.join(", ") || "—"),
-            h("td", {}, x.cal + " A"),
-            h("td", {}, String(x.sec).replace(".", ",") + " mm²"),
-            h("td", {}, idDe(x))
-          )
-        )
-      )
-    );
-    ouvrirModale(
-      "Plan → tableau électrique",
-      h(
-        "div",
-        { class: "pile" },
-        h(
-          "p",
-          { class: "aide", style: "margin:0" },
-          "Un disjoncteur par circuit du plan (nom, pièces desservies, calibre, section), rangés sous des interrupteurs différentiels 30 mA : 8 circuits au plus chacun, type A pour la cuisson et le lave-linge, un différentiel à elle pour la borne de recharge (type selon sa notice) ; l'éclairage et les prises répartis sur les différentiels (un circuit lumière et un circuit prises par différentiel quand il y en a assez). Tout reste modifiable ensuite dans le module Tableaux."
-        ),
-        tab,
-        h("label", { class: "champ" }, h("span", {}, "Nom du tableau"), nomT),
-        h("label", { class: "champ" }, h("span", {}, "Tableau"), choix)
-      ),
-      [
-        h("button", { class: "btn", onclick: fermerModale }, "Annuler"),
-        h(
-          "button",
-          {
-            class: "btn principal",
-            onclick: async () => {
-              try {
-                if (
-                  choix.value === "remplacer" &&
-                  !(await demanderOui(
-                    "Remplacer les étiquettes de ce tableau par celles du plan ? (ce qui y a été fait à la main sera perdu)"
-                  ))
-                )
-                  return;
-                const cpt = { n: 0, reps: new Map() };
-                const switchboard = projetTableau(lignes, nomT.value.trim() || "Tableau électrique", [], cpt);
-                repsDuTableau(cpt);
-                let id = deja && choix.value === "remplacer" ? deja.id : null;
-                if (id)
-                  await api("PUT", "/api/plans/" + id, { nom: switchboard.prjname, donnees: { ...(deja.donnees || {}), switchboard } });
-                else
-                  id = (
-                    await api("POST", "/api/plans", {
-                      genre: "tableau",
-                      nom: switchboard.prjname,
-                      client_id: p.client_id || null,
-                      document_id: p.document_id || null,
-                      adresse: p.adresse || "",
-                      donnees: { switchboard },
-                    })
-                  ).id;
-                d.tableau_id = id;
-                d.tableau_le = new Date().toISOString().slice(0, 10);
-                fermerModale();
-                await enregistrer();
-                aller("tableaux", { id });
-              } catch (e) {
-                erreur(e);
-              }
-            },
-          },
-          "Créer le tableau"
-        ),
-      ],
-      { largeur: "min(720px, 96vw)" }
-    );
-  }
-
-  /** plusieurs armoires (TGBT, TD étage, TD garage…) : un tableau par armoire, chacun avec ses circuits ;
-   *  l'armoire mère reçoit un départ pour chaque armoire qu'elle alimente, et chaque tableau sait d'où il est alimenté */
-  async function versTableaux() {
-    const ts = tableauxPlan(),
-      tete = teteArmoires(),
-      lignes = circuitsTableau();
-    if (!lignes.length) {
-      toast("Aucun circuit dans ce plan.", true);
-      return;
-    }
-    const mere = t => (t === tete ? null : ts.find(x => x.id === t.alim && x !== t) || tete);
-    const filles = t => ts.filter(x => x !== tete && x !== t && mere(x) === t);
-    const ordre = [];
-    const aj = t => {
-      if (ordre.includes(t)) return;
-      ordre.push(t);
-      filles(t).forEach(aj);
-    };
-    aj(tete);
-    ts.forEach(aj);
-    const de = new Map(lignes.map(x => [x, armoireDuCircuit(x.c)]));
-    const deja = d.tableaux_armoires || {};
-    const existants = {};
-    for (const t of ts)
-      if (deja[t.id]) {
-        const q = await api("GET", "/api/plans/" + deja[t.id]).catch(() => null);
-        if (q) existants[t.id] = q;
-      }
-    const nbDeja = Object.keys(existants).length;
-    const choix = h(
-      "select",
-      {},
-      nbDeja ? h("option", { value: "remplacer" }, "Remplacer le contenu des " + nbDeja + " tableau(x) déjà faits depuis ce plan") : null,
-      h("option", { value: "nouveau" }, "Nouveaux tableaux")
-    );
-    const corps = h("tbody", {});
-    for (const t of ordre) {
-      const m = mere(t),
-        siens = lignes.filter(x => de.get(x) === t);
-      corps.append(
-        h(
-          "tr",
-          {},
-          h(
-            "td",
-            { colspan: 6, style: "background:var(--fond-doux, #f1f5f9)" },
-            h("b", {}, "⚡ " + nomArmoire(t)),
-            t.batiment ? " — " + t.batiment : "",
-            m
-              ? h(
-                  "span",
-                  { class: "sous" },
-                  "  ← " + nomArmoire(m) + " (" + (t.alim_cal || 32) + " A, " + String(t.alim_sec || "10").replace(".", ",") + " mm²)"
-                )
-              : h("span", { class: "sous" }, "  tête de l'installation")
-          )
-        )
-      );
-      for (const f of filles(t))
-        corps.append(
-          h(
-            "tr",
-            {},
-            h("td", {}, ""),
-            h("td", {}, ""),
-            h("td", {}, "→ " + nomArmoire(f)),
-            h("td", { class: "sous" }, "alimentation"),
-            h("td", {}, (f.alim_cal || 32) + " A"),
-            h("td", {}, String(f.alim_sec || "10").replace(".", ",") + " mm²")
-          )
-        );
-      for (const x of siens)
-        corps.append(
-          h(
-            "tr",
-            {},
-            h("td", {}, h("b", {}, x.rep)),
-            h("td", {}, x.circuit || "—"),
-            h("td", {}, x.nom),
-            h("td", { class: "sous" }, x.pieces.join(", ") || "—"),
-            h("td", {}, x.cal + " A"),
-            h("td", {}, String(x.sec).replace(".", ",") + " mm²")
-          )
-        );
-      if (!siens.length && !filles(t).length) corps.append(h("tr", {}, h("td", { colspan: 6, class: "sous" }, "(aucun circuit)")));
-    }
-    ouvrirModale(
-      "Plan → tableaux électriques (" + ts.length + " armoires)",
-      h(
-        "div",
-        { class: "pile" },
-        h(
-          "p",
-          { class: "aide", style: "margin:0" },
-          "Un tableau par armoire du plan. Chaque circuit va dans l'armoire choisie dans la liste des circuits (sinon : celle où arrivent ses gaines). L'armoire mère reçoit un disjoncteur « Alim … » pour chaque armoire qu'elle alimente (symbole tableau : « Alimentée par »). Dans le module Tableaux : un onglet par armoire et le schéma synoptique."
-        ),
-        h(
-          "div",
-          { style: "max-height:52vh;overflow:auto" },
-          h(
-            "table",
-            { class: "resultats" },
-            h(
-              "thead",
-              {},
-              h(
-                "tr",
-                {},
-                ["", "Circuit du plan", "Étiquette", "Pièces", "Disj.", "Section"].map(t => h("th", {}, t))
-              )
-            ),
-            corps
-          )
-        ),
-        h("label", { class: "champ" }, h("span", {}, "Tableaux"), choix)
-      ),
-      [
-        h("button", { class: "btn", onclick: fermerModale }, "Annuler"),
-        h(
-          "button",
-          {
-            class: "btn principal",
-            onclick: async () => {
-              try {
-                const remplacer = choix.value === "remplacer";
-                if (
-                  remplacer &&
-                  !(await demanderOui(
-                    "Remplacer les étiquettes de ces tableaux par celles du plan ? (ce qui y a été fait à la main sera perdu)"
-                  ))
-                )
-                  return;
-                const groupeA = "plan-" + p.id + "-" + Date.now().toString(36),
-                  ids = {};
-                const cpt = { n: 0, reps: new Map() };
-                for (const t of ordre) {
-                  const fs = filles(t),
-                    sw = projetTableau(
-                      lignes.filter(x => de.get(x) === t),
-                      nomArmoire(t),
-                      fs,
-                      cpt
-                    );
-                  const m = mere(t),
-                    armoire = {
-                      parent: m ? ids[m.id] : null,
-                      depart: m ? t._depart || "" : "",
-                      libelle: m && t._depart ? t._depart + " " + (t.alim_cal || 32) + "A" : "",
-                      batiment: t.batiment || "",
-                      groupe:
-                        (remplacer &&
-                          existants[t.id] &&
-                          (existants[t.id].donnees || {}).armoire &&
-                          existants[t.id].donnees.armoire.groupe) ||
-                        groupeA,
-                    };
-                  const ex = remplacer ? existants[t.id] : null;
-                  if (ex) {
-                    await api("PUT", "/api/plans/" + ex.id, {
-                      nom: sw.prjname,
-                      donnees: { ...(ex.donnees || {}), switchboard: sw, armoire },
-                    });
-                    ids[t.id] = ex.id;
-                  } else
-                    ids[t.id] = (
-                      await api("POST", "/api/plans", {
-                        genre: "tableau",
-                        nom: sw.prjname,
-                        client_id: p.client_id || null,
-                        document_id: p.document_id || null,
-                        adresse: p.adresse || "",
-                        donnees: { switchboard: sw, armoire },
-                      })
-                    ).id;
-                }
-                ts.forEach(t => {
-                  delete t._depart;
-                });
-                d.tableaux_armoires = ids;
-                repsDuTableau(cpt);
-                d.tableau_le = new Date().toISOString().slice(0, 10);
-                fermerModale();
-                await enregistrer();
-                aller("tableaux", { id: ids[tete.id] });
-              } catch (e) {
-                erreur(e);
-              }
-            },
-          },
-          "Créer les " + ts.length + " tableaux"
-        ),
-      ],
-      { largeur: "min(760px, 96vw)" }
-    );
-  }
-
   /* -- gaines -- */
   /** texte d'une gaine : toujours horizontal (le plan se lit dans un seul sens), détouré de blanc (lisible sur un mur),
    *  posé à « k » du trait du côté de la normale (nx, ny) */
@@ -12795,8 +13432,8 @@ table{border-collapse:collapse;width:100%;margin-top:8px}td,th{border-bottom:1px
   /** liste du matériel imprimable : le total du plan (niveau affiché), puis pièce par pièce, et les blocs */
   function imprimerMateriel() {
     const symbs = d.objets.filter(o => o.genre === "symbole" && !estDecor(o));
-    const cle = o => (o.type === "rep_libre" || (o.texte !== undefined && o.type.startsWith("rep_")) ? "rep:" + (o.texte || "?") : o.type);
-    const lib = t => (SYMB[t] ? SYMB[t].libelle : t.startsWith("rep:") ? "Repère « " + t.slice(4) + " »" : t);
+    const cle = cleMateriel;
+    const lib = libMateriel;
     const table = liste => {
       const c = {};
       liste.forEach(o => (c[cle(o)] = (c[cle(o)] || 0) + 1));
@@ -14001,7 +14638,7 @@ ${parPiece || hors.length ? `<h2>Par pièce</h2><div class="pieces">${parPiece}$
   const repereDe = o =>
     !o
       ? ""
-      : o.type === "rep_libre"
+      : o.type === "rep_libre" || o.type === "rep_rect"
         ? o.texte || ""
         : ((optPlans().reperes_gaines || {})[o.type] ??
           REPERES_GAINE[o.type] ??
@@ -14758,308 +15395,323 @@ ${parPiece || hors.length ? `<h2>Par pièce</h2><div class="pieces">${parPiece}$
   }
 
   function aidePlan() {
-    const ligne = (touche, txt, icone) =>
+    // (trois onglets : au doigt, au clavier et à la souris — les outils dans le même ordre, chacun avec ses astuces —,
+    //  et ce qui ne dépend pas de l'appareil : circuits, niveaux, gaines, impression…)
+    const ligne = (icone, touche, nom, txt, astuces) =>
       h(
         "tr",
         {},
         h(
           "td",
-          { style: "white-space:nowrap;padding:2px 10px 2px 0;vertical-align:top" },
+          { style: "white-space:nowrap;padding:4px 10px 4px 0;vertical-align:top" },
           icone ? h("span", { style: "display:inline-block;min-width:28px;font-size:18px;text-align:center" }, icone) : null,
           touche ? h("kbd", { class: "rc" }, touche) : null
         ),
-        h("td", { style: "padding:2px 0" }, txt)
+        h(
+          "td",
+          { style: "padding:4px 0" },
+          nom ? h("b", {}, nom + " — ") : null,
+          txt,
+          astuces && astuces.length
+            ? h(
+                "ul",
+                { style: "margin:2px 0 0;padding-left:18px;color:#4b5563" },
+                astuces.map(a => h("li", {}, a))
+              )
+            : null
+        )
       );
-    const titre = t => h("h4", { style: "margin:10px 0 4px" }, t);
+    const titre = t => h("h4", { style: "margin:12px 0 4px" }, t);
+    const table = lignes => h("table", {}, h("tbody", {}, ...lignes));
+    const icPorte = h("span", { html: ICONES_SVG.porte + " " + ICONES_SVG.passage + " ▤" });
+    const icPiece = () => h("span", { html: ICONES_SVG.piece });
+    // (outils : [icône, touche, nom, au doigt, au clavier et à la souris, astuces communes])
+    const OUTILS = [
+      [
+        "↖",
+        "V",
+        "Sélection",
+        "un appui choisit (près d'un appareil, l'appareil plutôt que le mur derrière) ; ⇧ Maj puis appuis : en ajouter ou en retirer ; la poignée ✥ décalée sous l'appareil (ou à côté du mur, de la porte) se glisse pour le déplacer en le voyant.",
+        "clic ; Ctrl+clic ou Maj+clic pour ajouter ; cadre dans le vide ; Ctrl+A : tout ; glisser pour déplacer ; double-clic sur un appareil (ou G) : tout son groupe de liaisons ; Suppr ; Échap ou clic droit revient toujours ici.",
+        [
+          "Agrandir une pièce : glissez un mur ; il reste d'équerre, les murs reliés s'allongent, les appareils contre lui suivent.",
+          "Appareil choisi seul : carré en haut à droite (ou poignées carrées) pour l'agrandir ou l'élargir (radiateur…) ; il reste collé au mur.",
+          "Mur choisi seul : bouts A et B marqués, le panneau dit lequel bouge quand on tape la longueur ; 🔒 Longueur figée : il garde sa longueur.",
+          "Une porte se choisit d'un appui dans l'arc de son battant ; elle glisse le long de son mur.",
+        ],
+      ],
+      [
+        "▭",
+        "M",
+        "Murs",
+        "un appui à chaque angle, angles droits automatiques ; ⇧ Maj (barre du bas) : angle libre, le mur peut pencher ; ✓ Terminer pour finir ; longueur exacte : dans le panneau du mur, une fois tracé.",
+        "un clic à chaque angle, angles droits automatiques ; Maj : angle libre ; longueur tapée au clavier (ex. 3,45 puis Entrée) ; double-clic ou clic droit pour finir ; Alt maintenue : hors grille.",
+        [
+          "Aimantation aux bouts des murs et aux alignements (trait vert).",
+          "◠ Arrondi (2e appui sur le bouton Mur, ou M de nouveau) : touchez les deux murs sur leur moitié côté arrondi (pas besoin de viser le bout), puis le rayon ; angle ou murs parallèles ; l'arrondi choisi : rayon à changer, ou l'enlever.",
+          "Deux murs choisis : A et B sur le plan, angle entre eux dans le panneau (et lequel bouge) ; plusieurs murs : ⊾ Tout d'équerre.",
+        ],
+      ],
+      [
+        "⬚",
+        "E",
+        "Rectangle",
+        "appui sur un angle puis sur l'angle opposé (ou glisser) ; dimensions exactes : dans le panneau des murs, une fois tracé.",
+        "clic sur un angle puis sur l'angle opposé (ou glisser), ou dimensions tapées (ex. 4,5x3 puis Entrée).",
+        ["4 murs sans doubler ceux déjà là, et la pièce avec son nom."],
+      ],
+      [
+        "✍",
+        "H",
+        "Main levée",
+        "un appui prend l'outil, un 2e appui ouvre le menu des modes (lettre orange : M murs, S symboles, G gaines, N notes).",
+        "un clic prend l'outil, un 2e clic ouvre le menu ; la touche H passe au mode suivant.",
+        [
+          "Murs : le tour d'une pièce d'un seul trait devient des murs droits puis la pièce ; un petit quart de cercle contre un mur : une porte ; un rectangle étroit sur un mur : une fenêtre.",
+          "Symboles : le dessin devient le symbole reconnu (tableau : rectangle et ses deux diagonales) ; un rond avec une abréviation (PC, LL, RAD…) : le repère rond ; un trait d'un appareil à un autre : une liaison ; un trait fermé autour de plusieurs appareillages : un bloc.",
+          "Gaines : un trait de la boîte à l'appareil devient la gaine (ou la moulure).",
+          "Notes : dessin libre, trait droit, cercle, rectangle, flèche, en couleur ; ⌫ pour en effacer ; calque « Notes à main levée » pour les cacher.",
+          "↶ si le résultat ne convient pas.",
+        ],
+      ],
+      [
+        "⌫",
+        "X",
+        "Gomme",
+        "appuyez sur un mur et glissez le long de lui ; ou glissez sur les notes à effacer.",
+        "cliquez sur un mur et glissez le long de lui ; ou glissez sur les notes à effacer.",
+        ["Au milieu d'un mur : un passage (les pièces restent séparées) ; jusqu'au bout : le mur est raccourci."],
+      ],
+      [
+        icPorte,
+        "P / F",
+        "Porte, ouverture libre, fenêtre",
+        "un appui sur un mur ; 2e appui sur le bouton Porte : Porte (P), Libre (L), coulissante à Galandage (G) ou en Applique (A).",
+        "un clic sur un mur ; P de nouveau : porte → libre → galandage → applique ; F : fenêtre.",
+        [
+          "Type, largeur, sens d'ouverture et charnières dans le panneau de droite.",
+          "Coulissante : à galandage, elle rentre dans la cloison ; en applique, elle glisse le long du mur. Un appareil posé là où elle s'efface est marqué ⚠ porte.",
+        ],
+      ],
+      [
+        icPiece(),
+        "S",
+        "Pièce",
+        "un appui dans une pièce fermée ; contour à la main : ⇧ Maj, un appui à chaque angle, puis ✓ Terminer.",
+        "un clic dans une pièce fermée ; contour à la main : Maj+clic à chaque angle, puis Entrée.",
+        ["Nom et surface en m², même en L ; une pièce trouvée par clic suit les murs ; son nom se glisse."],
+      ],
+      [
+        "⤳",
+        "L",
+        "Liaison",
+        "appuyez sur un appareil et glissez jusqu'à l'autre (ou deux appuis).",
+        "clic sur un appareil, puis sur le suivant ; chaque liaison repart du dernier.",
+        ["Le circuit suit dans les deux sens ; poignée ronde pour courber une liaison choisie."],
+      ],
+      [
+        "⌇",
+        "U",
+        "Gaine, moulure, goulotte",
+        "glissez de la boîte (ou du tableau) à l'appareil ; 2e appui sur le bouton : Gaine / Moulure / Goulotte ; poignée bleue sur ce qu'on vient de poser : glissez-la pour courber.",
+        "clic sur la boîte, puis sur l'appareil ; clic dans le vide avant : un coude (Maj : libre) ; U de nouveau : gaine → moulure → goulotte ; à la souris, la gaine peut se tracer à main levée.",
+        [
+          "Une gaine par appareil, jamais de dérivation en T ; la suivante repart de la même boîte. À ne pas confondre avec les liaisons (qui commande quoi).",
+          "Fils en traits obliques de couleur, un lot par appareil, avec repère, section et diamètre ; couleur d'un fil : son petit trait dans le panneau.",
+          "Moulure : collée au mur, toujours droite, une porte contournée par-dessus ; appui (clic) dans le vide près du mur : départ du plafond.",
+        ],
+      ],
+      [
+        "◎",
+        "W",
+        "Roue des symboles",
+        "un appui là où poser, puis choix dans la roue (un appui : les autres symboles) ; un appui sur un appareil posé le glisse.",
+        "clic là où poser, puis choix dans la roue (survol : les autres) ; Échap ou clic droit : fermer.",
+        ["On reste dans l'outil pour le suivant ; à votre goût (outils de tracé compris) : ⚙ Options > Roue des symboles."],
+      ],
+      [
+        "T",
+        "T",
+        "Texte",
+        "un appui là où écrire ; sur un appareil : texte attaché qui le suit.",
+        "clic là où écrire ; sur un appareil : texte attaché qui le suit.",
+        ["Taille, couleur, gras dans le panneau."],
+      ],
+      [
+        "⚡",
+        "C / I / D / A",
+        "Appareils",
+        "liste des symboles à gauche (◧ pour l'afficher), puis un appui pour poser ; l'appareil qu'on vient de poser se glisse aussitôt.",
+        "C prise, I interrupteur, D DCL, A applique (les autres : liste de gauche) ; R : tourner.",
+        [
+          "Ils s'aimantent au mur le plus proche ; au plafond, ils se centrent dans la pièce ; ils ne s'alignent que sur ceux de la même pièce.",
+          "Double prise, interrupteur + prise : choisissez-les, « ▭ Mettre en bloc ».",
+          "Arrivée des combles et boîte posées près d'un coin : dans l'angle.",
+          "Un élément sans symbole (pompe, portail, spa…) : « Rectangle + texte libre… » (Divers), il se relie à une gaine comme un appareil.",
+          "Climatisation : split intérieur et groupe extérieur (Chauffage).",
+        ],
+      ],
+    ];
+    const outilsDe = col =>
+      table(OUTILS.map(o => ligne(o[0] instanceof Node ? o[0].cloneNode(true) : o[0], col === 3 ? "" : o[1], o[2], o[col], o[5])));
+    const tablette = h(
+      "div",
+      {},
+      titre("Outils, au doigt"),
+      outilsDe(3),
+      titre("Barre du bas (mode ✋ Tablette)"),
+      table([
+        ligne("↶ ↷", "", "", "Annuler / rétablir"),
+        ligne("✋", "", "", "Déplacer : un doigt fait glisser la vue au lieu de dessiner (deux doigts : déplacer et zoomer, toujours)"),
+        ligne("⇧", "", "", "Maj : comme la touche Maj — sélection de plusieurs objets, mur penché, contour de pièce point par point"),
+        ligne("✓", "", "", "Terminer : la pièce dessinée point par point ou la suite de murs (comme Entrée)"),
+        ligne("⟳", "", "", "Pivoter les appareils choisis d'un quart de tour"),
+        ligne("🗑", "", "", "Supprimer ce qui est choisi"),
+        ligne("Échap", "", "", "Quitter l'outil en cours"),
+        ligne("＋ －", "", "", "Zoomer / dézoomer (ou pincer à deux doigts)"),
+      ]),
+      titre("Écran"),
+      table([
+        ligne("◧ ◨", "", "", "Afficher ou cacher la liste des symboles (gauche) / le panneau de droite"),
+        ligne(
+          "☰",
+          "",
+          "",
+          "Fond de plan, options, imprimer, dupliquer, supprimer le plan ; boutons à droite (droitier) ou à gauche (gaucher)"
+        ),
+        ligne("⛶", "", "", "Plein écran (colonne bleue de gauche)"),
+        ligne("", "", "", "Appui long sur un bouton : son nom"),
+      ])
+    );
+    const clavier = h(
+      "div",
+      {},
+      titre("Outils, au clavier et à la souris"),
+      outilsDe(4),
+      titre("Souris"),
+      table([
+        ligne("", "Molette", "", "Zoomer / dézoomer, autour du pointeur"),
+        ligne("", "Clic du milieu + glisser", "", "Déplacer la vue ; aussi : Espace + glisser"),
+        ligne("", "Clic droit", "", "Murs : finit la suite de murs ; autres outils : retour à la sélection, comme Échap"),
+      ]),
+      titre("Clavier"),
+      table([
+        ligne("", "Échap", "", "Quitter l'outil en cours et revenir à la sélection (2e appui : ne plus rien choisir)"),
+        ligne("", "R", "", "Tourner les appareils choisis d'un quart de tour"),
+        ligne("", "G", "", "Choisir tout le groupe relié à l'appareil choisi"),
+        ligne("", "Suppr", "", "Effacer ce qui est choisi"),
+        ligne("", "Ctrl+Z / Ctrl+Y", "", "Annuler / rétablir"),
+        ligne("", "Alt (maintenue)", "", "Poser ou déplacer hors grille, au centimètre"),
+        ligne("", "?", "", "Cette aide"),
+      ]),
+      h(
+        "p",
+        { class: "sous", style: "margin:8px 0 0" },
+        "Sur PC, ◂ (avant Sélection) et ▸ (après Texte) replient la liste des symboles et le panneau de droite."
+      )
+    );
+    const general = h(
+      "div",
+      {},
+      h(
+        "ul",
+        { style: "margin:6px 0 0;padding-left:18px" },
+        ...[
+          "Circuits : « + Circuit » à droite, puis choisissez des appareils et « ← Affecter » ; « ⚡ Circuit spécialisé » pour un appareil seul ; alertes NF C 15-100 désactivables (⚙ Options > Circuits).",
+          "Pièce choisie : « Lot de prises… » répartit des prises le long des murs ; « Circuit lumière… » pose les points lumineux et les commandes (avec un lit : la 2e en tête de lit), avec liaisons et circuit.",
+          "Cotes (bloc Cotes du panneau) : murs extérieurs (largeur et profondeur), murs extérieurs détaillés (chaque façade, au bord extérieur), murs intérieurs (cotes intérieures), ou tout masquer ; une cote intérieure se change d'un appui (clic) dessus, ou dans le panneau du mur choisi, 🔒 pour la garder.",
+          "Niveaux (bloc Affichage) : ajouter, renommer, placer plus bas ou plus haut, supprimer ; circuits communs ; Calques : le niveau du dessous en transparence. Traversée de plancher : posée aussi sur le niveau du dessus.",
+          "Fond de plan (☰) : image ou PDF, mis à l'échelle par une ligne de longueur connue, puis dessiner par-dessus ; « Garder ce fond en vue sur les autres niveaux » ; photo d'un croquis : 🔍 Reconnaître murs et portes.",
+          "Calques (sous les circuits) : ce qui est affiché et imprimé ; « Plan seul » cache toute l'électricité.",
+          "Sanitaires et mobilier : à leur taille réelle, ne comptent nulle part ; douche et baignoire : volumes V1 et V2.",
+          "Plusieurs armoires : un symbole Tableau par armoire, « Alimentée par » dans son panneau ; chaque circuit choisit son armoire.",
+          "Options « Devis et métrés » : ouvrages repris dans le devis (« → Devis »), longueurs des gaines et des fils, registre des gaines et moulures (☰). Liste des plans → « → Tableau » : le tableau électrique.",
+          "Imprimer… : A4, A3 ou A3 en deux A4, échelle, contenu, cartouche et légende à glisser dans l'aperçu.",
+          "⚙ Options : taille du texte et des symboles, épaisseur des murs, symboles de la liste (cacher, ranger, importer les vôtres).",
+          "Le plan s'enregistre tout seul.",
+        ].map(t => h("li", { style: "margin:3px 0" }, t))
+      )
+    );
+    const ONGLETS = [
+      ["tablette", "✋ Tablette", tablette],
+      ["clavier", "⌨ Clavier et souris", clavier],
+      ["general", "Plan et réglages", general],
+    ];
+    let actif = etat.tablette ? "tablette" : "clavier";
+    try {
+      actif = localStorage.getItem("dfa_plan_aide") || actif;
+    } catch {
+      /* (stockage indisponible) */
+    }
+    const zone = h("div", { class: "aide-plan-zone", style: "max-height:62vh;overflow:auto;font-size:13.5px;line-height:1.45" });
+    const barre = h("div", { class: "sous-onglets", style: "margin-bottom:6px" });
+    const montrer = cle => {
+      actif = ONGLETS.some(o => o[0] === cle) ? cle : "clavier";
+      try {
+        localStorage.setItem("dfa_plan_aide", actif);
+      } catch {
+        /* (stockage indisponible) */
+      }
+      barre.querySelectorAll("button").forEach(b => b.classList.toggle("actif", b.dataset.o === actif));
+      zone.replaceChildren(ONGLETS.find(o => o[0] === actif)[2]);
+      zone.scrollTop = 0;
+    };
+    barre.append(...ONGLETS.map(([k, lib]) => h("button", { type: "button", "data-o": k, onclick: () => montrer(k) }, lib)));
+    montrer(actif);
+    // (recherche : les lignes et astuces des trois onglets qui contiennent les mots, avec le nom de leur onglet)
+    const sans = t =>
+      String(t || "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/\p{M}/gu, "");
+    const cherche = h("input", {
+      type: "search",
+      class: "aide-plan-cherche",
+      placeholder: "Chercher dans l'aide (ex. porte, longueur, fond)…",
+      style: "width:100%;margin-bottom:6px",
+    });
+    cherche.addEventListener("input", () => {
+      const mots = sans(cherche.value).split(/\s+/).filter(Boolean);
+      if (!mots.length) {
+        barre.style.display = "";
+        ONGLETS.forEach(([, , el]) => el.querySelectorAll(".cache-aide").forEach(x => x.classList.remove("cache-aide")));
+        montrer(actif);
+        return;
+      }
+      barre.style.display = "none";
+      const vus = [];
+      for (const [, lib, el] of ONGLETS) {
+        el.querySelectorAll(".cache-aide").forEach(x => x.classList.remove("cache-aide"));
+        let n = 0;
+        el.querySelectorAll("tbody > tr, ul > li").forEach(x => {
+          if (x.tagName === "LI" && x.closest("tr")) return; // (astuce d'un outil : avec son outil)
+          const ok = mots.every(m => sans(x.textContent).includes(m));
+          x.classList.toggle("cache-aide", !ok);
+          if (ok) n++;
+        });
+        el.querySelectorAll("table, ul").forEach(t => {
+          if (t.closest("tr")) return;
+          t.classList.toggle("cache-aide", !t.querySelector("tr:not(.cache-aide), li:not(.cache-aide)"));
+        });
+        el.querySelectorAll("h4").forEach(t => {
+          const suite = t.nextElementSibling;
+          t.classList.toggle("cache-aide", !suite || suite.classList.contains("cache-aide"));
+        });
+        if (n) vus.push(h("h4", { style: "margin:12px 0 2px;color:var(--accent)" }, lib), el);
+      }
+      zone.replaceChildren(...(vus.length ? vus : [h("p", { class: "sous" }, "Rien trouvé.")]));
+    });
     ouvrirModale(
       "Plans électriques : mode d'emploi",
       h(
         "div",
-        { style: "max-height:70vh;overflow:auto;font-size:13.5px;line-height:1.45" },
-        titre("Outils (une lettre au clavier)"),
-        h(
-          "table",
-          {},
-          h(
-            "tbody",
-            {},
-            ligne("V", "Sélection : choisir, déplacer, cadre dans le vide, Ctrl+clic (ou Maj+clic) pour ajouter, Ctrl+A pour tout", "↖"),
-            ligne("M", "Murs : clic à chaque angle, angles droits automatiques, longueur tapée au clavier puis Entrée", "▭"),
-            ligne(
-              "H",
-              "Main levée, au doigt ou à la souris ; un appui prend l'outil, un 2e appui ouvre le menu des modes (H : mode suivant). Murs (M) : le tour d'une pièce d'un seul trait devient des murs droits puis la pièce, un trait non fermé des murs, un quart de cercle contre un mur une porte. Symboles (S) : le dessin devient le symbole reconnu (DCL, interrupteur, prise…), un trait d'un appareil à un autre une liaison. Gaines (G) : un trait de la boîte à l'appareil devient une gaine (ou une moulure, selon le choix du bouton Gaine). Notes (N) : dessin libre en couleur, calque « Notes à main levée » pour les cacher. Murs : un rectangle étroit tracé sur un mur devient une fenêtre"
-            ),
-            ligne(
-              "E",
-              "Pièce rectangulaire : clic sur un angle puis sur l'angle opposé (ou glisser), ou dimensions tapées (ex. 4,5x3 puis Entrée) ; 4 murs sans doubler ceux déjà là, et la pièce",
-              "⬚"
-            ),
-            ligne(
-              "X",
-              "Gomme : appuyer sur un mur et glisser le long de lui ; au milieu du mur : un passage (les pièces restent séparées) ; jusqu'au bout : le mur est raccourci",
-              "⌫"
-            ),
-            ligne(
-              "P / F",
-              "Porte (P) ou ouverture libre, sans porte (L) : 2e appui sur le bouton pour changer / fenêtre : clic sur un mur, puis type, largeur, sens et charnières dans le panneau de droite ; à main levée (murs) : quart de cercle = porte, rectangle étroit sur un mur = fenêtre ; une porte se choisit d'un clic dans l'arc de son battant",
-              h("span", { html: ICONES_SVG.porte + " " + ICONES_SVG.passage + " ▤" })
-            ),
-            ligne(
-              "S",
-              "Pièce : clic dans une pièce fermée, même en L (nom et surface en m²) ; Maj+clic (tablette : ⇧ Plusieurs) pour dessiner un contour à la main",
-              h("span", { html: ICONES_SVG.piece })
-            ),
-            ligne(
-              "L",
-              "Liaison : clic sur un appareil, puis sur le suivant (ou glisser de l'un à l'autre)… chaque liaison repart du dernier ; le circuit suit dans les deux sens",
-              "⤳"
-            ),
-            ligne(
-              "U",
-              "Gaine (plan de pieuvre) : clic sur la boîte de dérivation (ou le tableau), puis sur l'appareil : trait direct, à courber par sa poignée ronde (une gaine par appareil, sans dérivation en T) ; clic dans le vide avant l'appareil : un coude ; la suivante repart de la boîte. Boîtes numérotées B1, B2… toutes seules (numéro à changer dans le panneau). Les fils sont dessinés en traits obliques de couleur, un lot par appareil, avec repère (SA, PC…), section et diamètre (⚙ Options > Pieuvre / moulure). À ne pas confondre avec les liaisons (qui commande quoi).",
-              "⌇"
-            ),
-            ligne(
-              "U (2e appui)",
-              "Moulure ou goulotte : un 2e appui sur le bouton Gaine ouvre le menu Gaine / Moulure / Goulotte (le bouton prend l'icône et la lettre G, M ou O). La moulure (ou la goulotte, plus grosse) se pose comme une gaine, mais collée au mur, toujours droite : le long du mur, par l'angle, ou en faisant le tour de la pièce ; une porte est contournée par-dessus (pointillé). Appui dans le vide près d'un mur : départ du plafond (arrivée des combles). Panneau : taille, pose (basse, haute, plafond, combles), montées et descentes en route, fils sur un autre morceau (◀ ▶).",
-              "▬ ▭"
-            ),
-            ligne(
-              "W",
-              "Roue des symboles : clic là où poser, puis choix dans la roue ; un appui sur un appareil posé le glisse ; groupes, symboles et outils de tracé à votre goût dans ⚙ Options > Roue des symboles",
-              "◎"
-            ),
-            ligne("T", "Texte libre (taille, couleur dans le panneau) ; clic sur un appareil : texte attaché qui le suit", "T"),
-            ligne(
-              "C / I / D / A",
-              "Poser une prise / un interrupteur / un point lumineux DCL / une applique (les autres : liste de gauche)"
-            )
-          )
-        ),
-        titre("Boutons du mode tablette (✋ Tablette)"),
-        h(
-          "table",
-          {},
-          h(
-            "tbody",
-            {},
-            ligne("", "Annuler / rétablir", "↶ ↷"),
-            ligne("", "Déplacer : un doigt fait glisser la vue au lieu de dessiner (deux doigts : déplacer et zoomer, toujours)", "✋"),
-            ligne(
-              "",
-              "Plusieurs : chaque appui ajoute ou retire un objet de la sélection (comme Ctrl+clic) ; outil Pièce : contour point par point",
-              "⇧"
-            ),
-            ligne("", "Terminer : finir la pièce dessinée point par point ou la suite de murs (comme Entrée)", "✓"),
-            ligne("", "Longueur : mur, longueur puis direction ; rectangle, dimensions (ex. 4,5x3)", "📏"),
-            ligne("", "Pivoter les appareils choisis d'un quart de tour", "⟳"),
-            ligne("", "Supprimer ce qui est choisi", "🗑"),
-            ligne("", "Quitter l'outil en cours (comme la touche Échap)", "Échap"),
-            ligne("", "Zoomer / dézoomer", "＋ －"),
-            ligne("", "Afficher ou cacher la liste des symboles (gauche) / le panneau de droite", "◧ ◨"),
-            ligne("", "Poignée sous l'appareil (ou à côté du mur) choisi : glissez-la pour le déplacer en le voyant", "✥"),
-            ligne(
-              "",
-              "Menu : fond de plan, options, imprimer, dupliquer, supprimer le plan ; boutons à droite (droitier) ou à gauche (gaucher)",
-              "☰"
-            ),
-            ligne(
-              "",
-              "Petite lettre orange dans le coin : l'outil a des options, un 2e appui (outil déjà pris) ouvre le menu ; au clavier, la même touche (H, U, P) passe au choix suivant. Main levée : M = murs, pièces et portes, S = symboles et liaisons, N = notes libres ; Porte : P = porte, L = libre, sans porte",
-              "✍ M / S / N"
-            ),
-            ligne("", "Plein écran (colonne bleue de gauche)", "⛶")
-          )
-        ),
-        titre("Souris"),
-        h(
-          "table",
-          {},
-          h(
-            "tbody",
-            {},
-            ligne("Clic du milieu + glisser", "Déplacer la vue (appuyer sur la molette et glisser) ; aussi : Espace + glisser"),
-            ligne("Molette", "Zoomer / dézoomer, autour du pointeur"),
-            ligne(
-              "Clic gauche + glisser",
-              "Outil Sélection : dans le vide, cadre pour choisir plusieurs objets ; sur un objet ou un mur, le déplacer"
-            ),
-            ligne(
-              "Double-clic / clic droit",
-              "Outil Murs : double-clic ou clic droit finit la suite de murs ; clic droit avec un autre outil (appareil, gaine, liaison, porte…) : retour à la sélection, comme Échap ; double-clic sur un appareil : tout son groupe de liaisons"
-            )
-          )
-        ),
-        titre("Clavier"),
-        h(
-          "table",
-          {},
-          h(
-            "tbody",
-            {},
-            ligne("Échap", "Quitter l'outil en cours et revenir à la sélection (2e appui : ne plus rien choisir)"),
-            ligne("R", "Tourner les appareils choisis d'un quart de tour"),
-            ligne("G", "Choisir tout le groupe d'appareils relié à l'appareil choisi (aussi : double-clic dessus)"),
-            ligne("Suppr", "Effacer ce qui est choisi"),
-            ligne("Ctrl+Z / Ctrl+Y", "Annuler / rétablir"),
-            ligne("Espace + glisser", "Déplacer la vue (aussi : clic du milieu, deux doigts sur tablette) ; molette ou pincer : zoom"),
-            ligne("?", "Cette aide")
-          )
-        ),
-        titre("Astuces"),
-        h(
-          "ul",
-          { style: "margin:0;padding-left:18px" },
-          h(
-            "li",
-            {},
-            "Agrandir une pièce : choisissez un mur et glissez-le ; il reste d'équerre, les murs reliés s'allongent et les appareils posés contre lui le suivent."
-          ),
-          h(
-            "li",
-            {},
-            "Les appareils s'aimantent au mur le plus proche ; au plafond, ils se centrent dans la pièce (lignes vertes). Ils ne s'alignent que sur les appareils de la même pièce."
-          ),
-          h(
-            "li",
-            {},
-            "Circuits : « + Circuit » à droite, puis choisissez des appareils et « ← Affecter ». Pour un interrupteur et ses lumières : double-clic sur l'un d'eux choisit tout le groupe, sans attraper les prises voisines."
-          ),
-          h(
-            "li",
-            {},
-            "Cotes : liste « Cotes » du bloc Affichage (panneau de droite) (tous les murs, principales, aucune) ; mur par mur avec la case « Afficher sa cote »."
-          ),
-          h(
-            "li",
-            {},
-            "Fond de plan : importez l'image ou le PDF d'un plan existant, mettez-le à l'échelle en traçant une ligne de longueur connue (bouts déplaçables, distance tapée en bas, Valider), puis dessinez par-dessus. Si des murs sont déjà dessinés, ils suivent la photo : seules les cotes changent."
-          ),
-          h(
-            "li",
-            {},
-            "Imprimer… : A4, A3 ou A3 en deux feuilles A4 à coller, échelle (1:50, 1:100…) ; contenu : tout, symboles et liaisons, ou plan de pieuvre (symboles et gaines) ; cartouche en bas à droite et légende à droite ou en bas ; glissez le plan, ou le cartouche, dans l'aperçu pour les placer sur la feuille."
-          ),
-          h(
-            "li",
-            {},
-            "Gaines : couleur d'un fil d'un clic sur son petit trait (panneau de la gaine), ou pour tous ses pareils d'un circuit (ex. le retour du bouton et de la lampe) ; couleurs par fonction et règle de remplissage (1/3 de la section intérieure) dans ⚙ Options."
-          ),
-          h(
-            "li",
-            {},
-            "Au doigt : poignée bleue sur la gaine, la liaison ou l'appareil qu'on vient de poser : glissez-la pour courber ou déplacer ; touchez ailleurs pour continuer."
-          ),
-          h(
-            "li",
-            {},
-            "Options « Devis et métrés » : ouvrages du catalogue repris dans le devis (liste des plans, « → Devis »), longueurs des gaines et des fils, registre des gaines et moulures imprimable (☰ : moulures communes comptées une fois, angles entrants, sortants et plats)."
-          ),
-          h(
-            "li",
-            {},
-            "Appareillages dans le même boîtier (double prise…) : choisissez-les, « ▭ Mettre en bloc » : rectangle noir, matériel compté par bloc, fils de tous dans la gaine."
-          ),
-          h(
-            "li",
-            {},
-            "Liste des plans → « → Tableau » : crée le tableau dans le module Tableaux (un disjoncteur par circuit : nom, pièces, calibre, section ; différentiels 30 mA, type A pour la cuisson et le lave-linge, un à elle pour la borne de recharge… ; éclairage et prises répartis sur les différentiels)."
-          ),
-          h(
-            "li",
-            {},
-            "Gaines nommées A, B, C… dans le sens des aiguilles d'une montre autour du tableau puis de chaque boîte (nom à changer dans le panneau) : écrit sur la gaine, et la légende imprimée liste les gaines et leurs fils. Main levée, mode gaines (⌇) : un trait de la boîte à l'appareil trace la gaine."
-          ),
-          h(
-            "li",
-            {},
-            "Gaine : les fils des appareils repiqués plus loin passent aussi (BP derrière la cloison gainé depuis l'interrupteur) ; « + Fils en plus » pour en ajouter ; section par gaine ou par circuit ; lettres des fils de fonction ou de couleur (⚙ Options). Appareil choisi : « ⚡ Circuit spécialisé » (ou d'office à la pose : ⚙ Options > Circuits spécialisés)."
-          ),
-          h(
-            "li",
-            {},
-            "⚙ Options : taille du texte de cet écran, taille des symboles, alertes NF C 15-100, largeurs par défaut. Alt maintenue : hors grille ; arrivée des combles et boîte près d'un coin : dans l'angle."
-          ),
-          h(
-            "li",
-            {},
-            "Niveaux : liste « Niveau » du bloc Affichage (panneau de droite) (ajouter un étage, renommer) ; les circuits sont communs à tous les niveaux ; les Calques peuvent montrer le niveau du dessous en transparence."
-          ),
-          h(
-            "li",
-            {},
-            "Traversée de plancher / arrivée des combles (symbole, Divers) : posée aussi sur le niveau du dessus, à la même place (sans niveau au-dessus : arrivée des combles, par le plafond) ; les gaines et leurs fils continuent de l'une à l'autre, la hauteur sous plafond compte dans les longueurs. Appareil choisi > « Lier à un appareil d'un autre niveau… » : liaison entre deux niveaux (flèche « ↑ Étage »), le circuit suit."
-          ),
-          h(
-            "li",
-            {},
-            "W — Roue des symboles : clic là où poser, puis choix dans la roue (Commande, Lumière… : survol pour les autres ; « Liaison, gaine » pour changer d'outil) ; on reste dans l'outil ; à votre goût : ⚙ Options > Roue des symboles (outils de tracé compris) ; appui sur un appareil posé : il se glisse. Liste des symboles : catégories repliables (clic sur le titre)."
-          ),
-          h(
-            "li",
-            {},
-            "Prise reliée à une commande par une liaison : prise commandée (pas de symbole à part). Case « Prise haute (H) » du panneau : « H 1,10 » à côté (hauteur : ⚙ Options > Devis et métrés > Hauteurs). Main levée, symboles : un trait fermé autour de plusieurs appareillages en fait un bloc."
-          ),
-          h(
-            "li",
-            {},
-            "Moulures : 2e appui sur le bouton Gaine (ou roue, « Liaison, gaine ») : nouvelles gaines ou moulures, les deux sur le même plan ; une gaine se change dans son panneau (Conduit). La moulure se colle au mur (par l'angle si les deux appareils sont sur deux murs qui se touchent), trait de couleur (⚙ Options > Gaines), partie basse ou haute du mur, et à chaque angle ou coude elle peut descendre ou remonter (panneau) ; flèche ↑ ↓ où elle remonte ou descend. Toujours droite, longueur = son tracé ; murs face à face : elle fait le tour de la pièce ; une porte sur son chemin est contournée par-dessus (pointillé, comptée). Appui dans le vide : départ du plafond (arrivée des combles). Goulotte : comme une moulure, plus grosse. Panneau : « monte au plafond », « passe dans les combles », fils sur un autre morceau (◀ ▶)."
-          ),
-          h(
-            "li",
-            {},
-            "Plusieurs armoires : un symbole Tableau par armoire ; dans son panneau, nom, bâtiment, « Alimentée par » et le départ (calibre, section). Chaque circuit choisit son armoire (« ⚡ … (auto) » : celle où arrivent ses gaines). Plan → tableau : un tableau par armoire, reliés entre eux (onglets et schéma synoptique dans le module Tableaux)."
-          ),
-          h(
-            "li",
-            {},
-            "Calques (panneau de droite, sous les circuits) : choisir ce qui est affiché et imprimé (murs, cotes, pièces, électricité par famille, liaisons, textes, fond) ; « Plan seul » cache toute l'électricité."
-          ),
-          h(
-            "li",
-            {},
-            "Pièce choisie : « Lot de prises… » répartit des prises le long des murs ; « Circuit lumière… » pose les points lumineux et les commandes (toujours une à la porte ; avec un lit, la 2e en tête de lit, la 3e de l'autre côté ; les suivantes aux autres portes ; 1 : simple, 2 : va-et-vient, 3 et plus : poussoirs), avec liaisons et circuit. Partie Matériel du panneau (ou ☰) : liste du matériel imprimable, pièce par pièce."
-          ),
-          h(
-            "li",
-            {},
-            "Appareil choisi seul : poignées carrées pour l'agrandir (coin) ou l'élargir (côté), ex. un radiateur ; liaison choisie : poignée ronde pour la courber. Le nom d'une pièce se glisse à la souris."
-          ),
-          h(
-            "li",
-            {},
-            "Main levée, mode symboles : dessinez le symbole (tableau : rectangle et ses deux diagonales), ou un rond (ou un rectangle, d'un seul trait) avec son abréviation en majuscules dedans ; le repère rond correspondant est posé (liste à changer : ⚙ Options > Abréviations lues à main levée). Par défaut : PC prise, LL lave-linge, LV lave-vaisselle, SL sèche-linge, RAD radiateur, CE chauffe-eau, FOUR, MO micro-ondes, FR ou REF réfrigérateur, CONG ou CG congélateur, PL ou CUI plaque / cuisinière, VMC, TV, RJ ou RJ45, 32A cuisson, SS sèche-serviettes, VR volet roulant, BAES, VE ou IRVE borne de recharge, DAAF, TGBT, TG, TAB ou TD tableau. Les autres choix possibles s'affichent en bas."
-          ),
-          h(
-            "li",
-            {},
-            "Cotes intérieures (case du bloc Affichage, à droite) : une cote verte par partie de pièce de chaque côté des murs ; un clic dessus change la dimension (la cloison au bout se déplace, avec les cloisons et les appareils posés contre elle) ; « 🔒 Garder cette dimension » : en changeant une autre cote, c'est le mur qui la respecte qui bouge. Les murs intérieurs n'ont alors plus leur cote propre (case « Afficher sa cote » pour la remettre) ; la cote d'un mur extérieur est toujours du côté extérieur."
-          ),
-          h(
-            "li",
-            {},
-            "Mur choisi seul : ses bouts A et B sont marqués ; dans le panneau, choisissez lequel bouge quand vous tapez la longueur."
-          ),
-          h(
-            "li",
-            {},
-            "🔒 Longueur figée (case du panneau, aussi pour plusieurs murs) : le mur garde sa longueur ; tiré par un bout, il tourne autour de l'autre ; les déplacements qui l'allongeraient ou le raccourciraient sont refusés. Sa cote porte un cadenas."
-          ),
-          h(
-            "li",
-            {},
-            "Sanitaires et mobilier (douche, baignoire, WC, lavabo, évier, lits) : à leur taille réelle, pour voir l'usage de la pièce ; ne comptent nulle part (ni circuit, ni matériel, ni devis). Douche, baignoire : volumes V1 et V2 dessinés, appareil dedans marqué ⚠ ; douche sans receveur (case du panneau) : V1 = 1,20 m autour de l'arrivée d'eau. Lit : « Circuit lumière… » met la 2e commande en tête de lit."
-          ),
-          h(
-            "li",
-            {},
-            "⚙ Options > Symboles de la liste : cacher les symboles inutiles, les ranger dans une autre catégorie (⇄), renommer une catégorie (✎), importer vos propres symboles (fichiers SVG). La liste de gauche a une case de recherche."
-          ),
-          h("li", {}, "Le plan s'enregistre tout seul. Le nom de la pièce de chaque appareil est noté (liste du matériel par pièce).")
-        ),
+        {},
+        cherche,
+        barre,
+        zone,
         h(
           "p",
-          {},
+          { style: "margin:8px 0 0" },
           h(
             "a",
             { href: "aide/index.html#plans-électriques-module-électricien", target: "_blank" },
@@ -15068,7 +15720,7 @@ ${parPiece || hors.length ? `<h2>Par pièce</h2><div class="pieces">${parPiece}$
         )
       ),
       [h("button", { class: "btn principal", onclick: fermerModale }, "Fermer")],
-      { largeur: "min(760px, 94vw)" }
+      { largeur: "min(780px, 94vw)" }
     );
   }
 
@@ -15192,8 +15844,25 @@ ${parPiece || hors.length ? `<h2>Par pièce</h2><div class="pieces">${parPiece}$
           valider();
         }
       });
+      const tous = h("input", { type: "checkbox", checked: !!d.fond.tous });
+      tous.addEventListener("change", () => {
+        if (tous.checked) {
+          // (un seul fond gardé sur tous les niveaux)
+          for (const e of Object.values(d.etages || {})) if (e && e.fond) delete e.fond.tous;
+          d.fond.tous = true;
+        } else delete d.fond.tous;
+        valider();
+      });
       blocs.push(
         h("label", { class: "champ" }, h("span", {}, "Visibilité du fond"), op),
+        d.niveaux && d.niveaux.length > 1
+          ? h(
+              "label",
+              { class: "case", title: "Les niveaux qui n'ont pas leur propre fond montrent celui-ci (pour caler les murs d'un étage)" },
+              tous,
+              "Garder ce fond en vue sur les autres niveaux"
+            )
+          : null,
         h("label", { class: "champ" }, h("span", {}, "Largeur réelle de l'image (m)"), larg),
         h(
           "div",
@@ -15596,14 +16265,20 @@ ${parPiece || hors.length ? `<h2>Par pièce</h2><div class="pieces">${parPiece}$
     d.objets
       .filter(ob => ob.genre === "symbole" && symboleVu(ob) && !estDecor(ob))
       .forEach(ob => {
-        const k = ob.type === "rep_libre" || (ob.texte !== undefined && ob.type.startsWith("rep_")) ? "rep:" + (ob.texte || "?") : ob.type;
+        const k = cleMateriel(ob);
         comptes[k] = (comptes[k] || 0) + 1;
       });
     if (o.leg_symboles === false) for (const k of Object.keys(comptes)) delete comptes[k];
     if (Object.keys(comptes).length) titre("Légende");
     for (const [t, n] of Object.entries(comptes)) {
-      const dessin = SYMB[t] ? dessinTrait(SYMB[t].dessin) : t.startsWith("rep:") ? dessinRepere(t.slice(4)) : "";
-      const lib = (SYMB[t] || {}).libelle || (t.startsWith("rep:") ? "Repère " + t.slice(4) : t);
+      const dessin = SYMB[t]
+        ? dessinTrait(SYMB[t].dessin)
+        : t.startsWith("rep:")
+          ? dessinRepere(t.slice(4))
+          : t.startsWith("rect:")
+            ? dessinRepere(t.slice(5), true)
+            : "";
+      const lib = (SYMB[t] || {}).libelle || (t.startsWith("rep:") ? "Repère " + t.slice(4) : t.startsWith("rect:") ? t.slice(5) : t);
       el.push({
         h: 6.4,
         w: 8 + lib.length * 1.45 + 7,
@@ -15703,6 +16378,8 @@ ${parPiece || hors.length ? `<h2>Par pièce</h2><div class="pieces">${parPiece}$
   }
   /** cartouche conventionnel : entreprise, plan, client, adresse, date, échelle, format */
   function cartoucheSvg(c, o, N) {
+    // (version web autonome : ce qui a été tapé dans la fenêtre Imprimer ; DF artisan prend ses propres données)
+    const cm = (PLANS_AUTONOMES && d.cartouche_manuel) || {};
     const e = (PARAMS && PARAMS.entreprise) || {},
       { x, y, l, h: ht } = c;
     const niv = d.niveaux.length > 1 ? (d.niveaux.find(n => n.id === d.niveau) || {}).nom || "" : "";
@@ -15723,7 +16400,7 @@ ${parPiece || hors.length ? `<h2>Par pièce</h2><div class="pieces">${parPiece}$
     const logo = o.cart_logo !== false && e.logo && /^data:image\//.test(e.logo);
     if (logo)
       s += `<image href="${String(e.logo).replace(/"/g, "&quot;")}" x="${x + 2}" y="${y + 1.3}" width="${30}" height="${8.4}" preserveAspectRatio="xMinYMid meet"/>`;
-    else s += t(x + 2, y + 5, e.nom_commercial || e.raison_sociale || "", 3.2, true, "", 18);
+    else s += t(x + 2, y + 5, e.nom_commercial || e.raison_sociale || cm.entreprise || "", 3.2, true, "", 18);
     const y1 = logo ? y + 13 : y + 9.5;
     const adrE = [e.adresse, [e.cp, e.ville].filter(Boolean).join(" ")].filter(Boolean);
     adrE.slice(0, 2).forEach((a, i) => {
@@ -15733,20 +16410,28 @@ ${parPiece || hors.length ? `<h2>Par pièce</h2><div class="pieces">${parPiece}$
     // à droite : titre, client, adresse du chantier
     const titre = (nom.value || "Plan") + (niv ? " — " + niv : "");
     s +=
-      t(g1 + 2, y + 3.4, contenuImp(o) === "pieuvre" ? "PLAN DE PIEUVRE" : "PLAN D'IMPLANTATION ÉLECTRIQUE", 2.1, false, "", 60) +
-      t(g1 + 2, y + 7.6, titre, 3.6, true, "", 34);
+      t(
+        g1 + 2,
+        y + 3.4,
+        o.titre_cartouche || (contenuImp(o) === "pieuvre" ? "PLAN DE PIEUVRE" : "PLAN D'IMPLANTATION ÉLECTRIQUE"),
+        2.1,
+        false,
+        "",
+        60
+      ) + t(g1 + 2, y + 7.6, titre, 3.6, true, "", 34);
     s +=
       t(g1 + 2, r1 + 2.6, "Client", 1.9) +
       t(
         g1 + 2,
         r1 + 6.4,
-        [p.client_nom, p.document_numero && "Devis " + p.document_numero].filter(Boolean).join(" · "),
+        [p.client_nom || cm.client, p.document_numero && "Devis " + p.document_numero].filter(Boolean).join(" · "),
         2.8,
         false,
         "",
         42
       );
-    s += t(g1 + 2, r2 + 2.4, "Chantier", 1.9) + t(g1 + 2, r2 + 5.6, (p.adresse || "").replace(/\n/g, ", "), 2.6, false, "", 46);
+    s +=
+      t(g1 + 2, r2 + 2.4, "Chantier", 1.9) + t(g1 + 2, r2 + 5.6, (p.adresse || cm.chantier || "").replace(/\n/g, ", "), 2.6, false, "", 46);
     // bas : date, échelle, format
     const cases = [
         ["Date", new Date().toLocaleDateString("fr-FR")],
@@ -15989,6 +16674,14 @@ ${parPiece || hors.length ? `<h2>Par pièce</h2><div class="pieces">${parPiece}$
       return h("label", { class: "case", style: "font-size:12.5px" }, c, lib);
     };
     const indice = h("input", { type: "text", value: o.indice || "A", maxlength: 4, style: "width:60px" });
+    // (titre du cartouche, au-dessus du nom du plan : à votre goût ; vide : le titre d'office)
+    const titreCart = h("input", {
+      type: "text",
+      value: o.titre_cartouche || "",
+      maxlength: 60,
+      placeholder: "PLAN D'IMPLANTATION ÉLECTRIQUE",
+      title: "Vide : « Plan d'implantation électrique » (ou « Plan de pieuvre »)",
+    });
     const avecLogo = !!((PARAMS && PARAMS.entreprise) || {}).logo;
     const cLogo = h("input", { type: "checkbox", checked: o.cart_logo !== false });
     cLogo.addEventListener("change", () => {
@@ -16059,9 +16752,27 @@ ${parPiece || hors.length ? `<h2>Par pièce</h2><div class="pieces">${parPiece}$
       o.texte = Number(selTx.value);
       o.cartouche = cCart.checked;
       o.indice = indice.value.trim();
+      o.titre_cartouche = titreCart.value.trim();
       rendre();
     };
-    [selF, selO, selE, selSy, selTx, cLeg, cFond, cCart, indice].forEach(el => el.addEventListener("change", lire));
+    [selF, selO, selE, selSy, selTx, cLeg, cFond, cCart, indice, titreCart].forEach(el => el.addEventListener("change", lire));
+    // (version web autonome : cartouche rempli à la main — entreprise, client, chantier —, gardé avec le plan ; DF
+    //  artisan ne s'en sert pas, il prend ses propres coordonnées, client et adresse)
+    const champsCart = PLANS_AUTONOMES
+      ? [
+          ["entreprise", "Entreprise (nom, téléphone…)"],
+          ["client", "Client"],
+          ["chantier", "Adresse du chantier"],
+        ].map(([k, lib]) => {
+          const c = h("input", { type: "text", value: (d.cartouche_manuel || {})[k] || "", placeholder: lib });
+          c.addEventListener("change", () => {
+            d.cartouche_manuel = { ...(d.cartouche_manuel || {}), [k]: c.value.trim() };
+            valider();
+            rendre();
+          });
+          return h("label", { class: "champ" }, h("span", {}, lib), c);
+        })
+      : [];
     const vueA = { z: 1, cx: null, cy: null };
     const zoomA = (f, cx, cy) => {
       const z0 = vueA.z;
@@ -16172,6 +16883,8 @@ ${parPiece || hors.length ? `<h2>Par pièce</h2><div class="pieces">${parPiece}$
           avecLogo
             ? h("label", { class: "case", title: "Logo de Paramètres > Coordonnées" }, cLogo, "Logo à la place du nom de l'entreprise")
             : null,
+          ligne("Titre du cartouche", titreCart),
+          ...champsCart,
           ligne("Indice du plan", indice),
           h("label", { class: "case" }, cFond, "Imprimer le fond de plan"),
           h(
@@ -16479,12 +17192,19 @@ ${parPiece || hors.length ? `<h2>Par pièce</h2><div class="pieces">${parPiece}$
       toast({ gaine: "⌇ Gaine", moulure: "▬ Moulure", goulotte: "▭ Goulotte" }[suiv] + " (U : choix suivant)");
       return;
     }
+    if (o === "mur" && etat.outil === "mur") {
+      e.preventDefault();
+      choisirGenreMur(etat.genreMur === "arrondi" ? "droit" : "arrondi");
+      toast((etat.genreMur === "arrondi" ? "◠ Arrondi entre deux murs" : "▭ Murs droits") + " (M : choix suivant)");
+      return;
+    }
     if (o === "porte" && etat.outil === "porte") {
       e.preventDefault();
-      etat.genrePorte = etat.genrePorte === "passage" ? "porte" : "passage";
+      const ks = Object.keys(GENRES_PORTE);
+      etat.genrePorte = ks[(ks.indexOf(etat.genrePorte) + 1) % ks.length];
       majBoutonsOptions();
       choisirOutil("porte");
-      toast((etat.genrePorte === "passage" ? "Ouverture libre, sans porte" : "Porte (battant)") + " (P : choix suivant)");
+      toast(GENRES_PORTE[etat.genrePorte][2] + " (P : choix suivant)");
       return;
     }
     if (o) {
@@ -16522,70 +17242,13 @@ ${parPiece || hors.length ? `<h2>Par pièce</h2><div class="pieces">${parPiece}$
     b.classList.toggle("actif", etat.tabVue);
   });
   const btMaj = btT(
-    "⇧ Plusieurs",
-    "Sélection : ajoute ou retire chaque objet touché (comme Ctrl+clic). Pièce : contour point par point (comme Maj+clic).",
+    "⇧ Maj",
+    "Comme la touche Maj : Sélection — ajoute ou retire chaque objet touché (comme Ctrl+clic) ; Mur — angle libre, le mur peut pencher (plus d'aimant à 90° et 45°) ; Pièce — contour point par point.",
     b => {
       etat.tabMaj = !etat.tabMaj;
       b.classList.toggle("actif", etat.tabMaj);
     }
   );
-  const longueur = async () => {
-    if (etat.outil === "rectangle" && etat.rect) {
-      const v = await demanderTexte("Dimensions du rectangle en mètres, largeur x profondeur (ex. 4,5x3) :", "");
-      if (!v) return;
-      etat.tape = v.replace(/,/g, ".").replace(/[X*×]/g, "x").replace(/\s/g, "");
-      const ap = (etat.apercu || {}).point;
-      const b = rectTape(ap && (ap.x !== etat.rect.x || ap.y !== etat.rect.y) ? ap : { x: etat.rect.x + 1, y: etat.rect.y + 1 });
-      if (b) creerRectangle(etat.rect, b);
-      else toast("Tapez largeur x profondeur en mètres, ex. 4,5x3", true);
-      return;
-    }
-    if (etat.outil !== "mur" || !etat.mur) {
-      toast("Touchez d'abord le point de départ du mur (outil Mur), ou le premier angle (outil Rectangle).", true);
-      return;
-    }
-    const champ = h("input", { type: "text", inputmode: "decimal", placeholder: "ex. 3,40", style: "font-size:20px;width:8em" });
-    const poser = (dx, dy) => {
-      const L = nombre(champ.value) * 100;
-      if (!(L > 0)) {
-        toast("Indiquez la longueur en mètres.", true);
-        return;
-      }
-      const q = { x: etat.mur.x + dx * L, y: etat.mur.y + dy * L };
-      d.murs.push({ id: plId(), a: { x: etat.mur.x, y: etat.mur.y }, b: q });
-      etat.mur = { ...q };
-      etat.tape = "";
-      fermerModale();
-      valider();
-    };
-    const dir = (txt, dx, dy) =>
-      h("button", { class: "btn", style: "font-size:24px;min-width:64px;min-height:56px", onclick: () => poser(dx, dy) }, txt);
-    ouvrirModale(
-      "Longueur du mur",
-      h(
-        "div",
-        { class: "pile", style: "align-items:center" },
-        h("label", { class: "champ" }, h("span", {}, "Longueur (m)"), champ),
-        h("p", { class: "aide", style: "margin:0" }, "Puis la direction :"),
-        h(
-          "div",
-          { style: "display:grid;grid-template-columns:repeat(3,64px);gap:6px" },
-          h("span"),
-          dir("↑", 0, -1),
-          h("span"),
-          dir("←", -1, 0),
-          h("span"),
-          dir("→", 1, 0),
-          h("span"),
-          dir("↓", 0, 1),
-          h("span")
-        )
-      ),
-      [h("button", { class: "btn", onclick: fermerModale }, "Annuler")],
-      { largeur: "min(340px, 94vw)" }
-    );
-    setTimeout(() => champ.focus(), 50);
-  };
   const zoom = f => {
     const r = svg.getBoundingClientRect();
     const c = versMonde(r.left + r.width / 2, r.top + r.height / 2);
@@ -16609,7 +17272,6 @@ ${parPiece || hors.length ? `<h2>Par pièce</h2><div class="pieces">${parPiece}$
         valider();
       } else touche("Enter");
     }),
-    btT("📏 Longueur…", "Mur : longueur et direction ; Rectangle : dimensions (ex. 4,5x3)", longueur),
     btT("⟳ Pivoter", "Tourner les symboles choisis d'un quart de tour (touche R)", () => touche("r")),
     btT("🗑 Supprimer", "Supprimer ce qui est choisi (touche Suppr)", () => touche("Delete")),
     btT("Échap", "Quitter l'outil en cours et revenir à la sélection (touche Échap)", () => touche("Escape")),
@@ -16725,10 +17387,9 @@ ${parPiece || hors.length ? `<h2>Par pièce</h2><div class="pieces">${parPiece}$
   new ResizeObserver(() => {
     if (page.isConnected) dessiner();
   }).observe(cadre);
-  choisirOutil(d.murs.length ? "selection" : "mur");
+  choisirOutil("selection");
   majPanneau();
   if (arg && arg.rattacher) rattacher().catch(erreur);
-  if (arg && arg.tableau) setTimeout(() => versTableau().catch(erreur), 300);
   if (arg && arg.etiquettes) setTimeout(() => versEtiquettes().catch(erreur), 300);
   if (arg && arg.devis) setTimeout(() => versDevis().catch(erreur), 300); // (bouton « → Devis » de la liste des plans)   // (bouton « Tableau » de la liste des plans)
 }

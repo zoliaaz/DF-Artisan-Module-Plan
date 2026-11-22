@@ -495,6 +495,103 @@ document.getElementById("importer-options").addEventListener("click", importerOp
   if (url) l.href = url;
   else l.style.display = "none";
 })();
+/** Markdown simple (titres, gras, italique, liens, listes, paragraphes) → HTML ; un titre suivi d'une liste : à part */
+function mdEnHtml(texte) {
+  const esc = t => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const enLigne = t =>
+    esc(t)
+      .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
+      .replace(/\*(.+?)\*/g, "<i>$1</i>")
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  return String(texte)
+    .replace(/^(#{1,3}\s.*)\n(?=\S)/gm, "$1\n\n")
+    .split(/\n\s*\n/)
+    .map(p => {
+      const l = p.split("\n");
+      if (/^###\s/.test(p)) return "<h3>" + enLigne(p.replace(/^###\s+/, "")) + "</h3>";
+      if (/^##?\s/.test(p)) return "<h2>" + enLigne(p.replace(/^##?\s+/, "")) + "</h2>";
+      if (l.every(x => /^\s*[-*]\s/.test(x)))
+        return "<ul>" + l.map(x => "<li>" + enLigne(x.replace(/^\s*[-*]\s+/, "")) + "</li>").join("") + "</ul>";
+      return "<p>" + l.map(enLigne).join("<br>") + "</p>";
+    })
+    .join("");
+}
+/* nouveautés : fenêtre du bouton « 📋 Nouveautés » (nouveautes.md, à côté de la page) ; un point tant que celles de
+ * cette version n'ont pas été vues */
+(() => {
+  const b = document.getElementById("nouveautes");
+  if (!b) return;
+  const v = window.VERSION_PLANS || "";
+  let vue = "";
+  try {
+    vue = localStorage.getItem("plans-nouveautes-vues") || "";
+  } catch {
+    /* */
+  }
+  if (v && vue !== v) b.classList.add("non-vu");
+  b.addEventListener("click", async () => {
+    let t = "";
+    try {
+      const r = await fetch("nouveautes.md", { cache: "no-cache" });
+      if (r.ok) t = await r.text();
+    } catch {
+      /* */
+    }
+    const corps = h("div", { class: "mot-auteur nouveautes-liste" });
+    corps.innerHTML = t.trim()
+      ? mdEnHtml(t)
+      : "<p>Liste des nouveautés indisponible (page ouverte sans serveur : voir le fichier nouveautes.md du dossier).</p>";
+    ouvrirModale("Nouveautés" + (v ? " — version " + v : ""), corps, [
+      h("button", { class: "btn principal", onclick: fermerModale }, "Fermer"),
+    ]);
+    b.classList.remove("non-vu");
+    try {
+      if (v) localStorage.setItem("plans-nouveautes-vues", v);
+    } catch {
+      /* */
+    }
+  });
+})();
+/* nouvelle version en ligne : version.json (écrit à chaque fabrication) comparé à celle de la page, à l'ouverture,
+ * toutes les 30 min et au retour sur l'onglet ; bandeau « Recharger » — plans et options sont gardés dans le
+ * navigateur : on attend seulement la fin de l'enregistrement en cours */
+(() => {
+  const v = window.VERSION_PLANS;
+  if (!v || location.protocol === "file:") return;
+  let bandeau = null;
+  const recharger = async () => {
+    const fin = Date.now() + 5000;
+    while (Date.now() < fin && [...document.querySelectorAll(".plan-statut")].some(x => x.textContent === "…"))
+      await new Promise(r => setTimeout(r, 200));
+    await new Promise(r => setTimeout(r, 300)); // (écriture en cours dans le navigateur)
+    location.reload();
+  };
+  const verifier = async () => {
+    if (bandeau) return;
+    try {
+      const r = await fetch("version.json?t=" + Date.now(), { cache: "no-store" });
+      if (!r.ok) return;
+      const n = (await r.json()).version;
+      if (!n || n === v) return;
+      bandeau = h(
+        "div",
+        { class: "bandeau-maj", role: "status" },
+        h("span", {}, "🔄 Une nouvelle version des plans est disponible (" + n + ")."),
+        h("button", { class: "btn principal petit", onclick: recharger }, "Recharger la page"),
+        h("span", { class: "sous" }, "Vos plans et vos options sont gardés."),
+        h("button", { class: "btn petit", title: "Plus tard", onclick: () => bandeau.classList.add("cache") }, "✕")
+      );
+      document.body.append(bandeau);
+    } catch {
+      /* (hors connexion : rien) */
+    }
+  };
+  setTimeout(verifier, 3000);
+  setInterval(verifier, 30 * 60 * 1000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") verifier();
+  });
+})();
 // mot de l'auteur et don : réglés dans auteur.json et mot-auteur.md (à côté de la page) ; absents ou vides : cachés
 (async () => {
   const lire = async (f, json) => {
@@ -534,24 +631,7 @@ document.getElementById("importer-options").addEventListener("click", importerOp
     });
   }
   if (mot) {
-    // (Markdown simple : titres, gras, italique, liens, listes, paragraphes)
-    const esc = t => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
-    const enLigne = t =>
-      esc(t)
-        .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
-        .replace(/\*(.+?)\*/g, "<i>$1</i>")
-        .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-    const html = mot
-      .split(/\n\s*\n/)
-      .map(p => {
-        const l = p.split("\n");
-        if (/^###\s/.test(p)) return "<h3>" + enLigne(p.replace(/^###\s+/, "")) + "</h3>";
-        if (/^##?\s/.test(p)) return "<h2>" + enLigne(p.replace(/^##?\s+/, "")) + "</h2>";
-        if (l.every(x => /^\s*[-*]\s/.test(x)))
-          return "<ul>" + l.map(x => "<li>" + enLigne(x.replace(/^\s*[-*]\s+/, "")) + "</li>").join("") + "</ul>";
-        return "<p>" + l.map(enLigne).join("<br>") + "</p>";
-      })
-      .join("");
+    const html = mdEnHtml(mot);
     bMot.style.display = "";
     bMot.addEventListener("click", () => {
       const corps = h("div", { class: "mot-auteur" });
