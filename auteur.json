@@ -1,6 +1,6 @@
 {
   "_aide": "Liens de la page : don (adresse Ko-fi, ex. https://ko-fi.com/votre-nom), github (adresse du dépôt). Vide : le bouton est caché. Le mot de l'auteur est dans mot-auteur.md (vide : bouton caché).",
-  "don": "",
+  "don": "https://ko-fi.com/DFArtisan",
   "don_texte": "Faire un don ☕",
   "github": "https://github.com/zoliaaz/DF-Artisan-Module-Plan"
 }
