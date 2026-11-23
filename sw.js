@@ -1,7 +1,7 @@
 /* Plans électriques : fonctionne hors connexion (fichiers gardés par le navigateur).
  * À chaque nouvelle version, outils/fabriquer_plans_web.py change VERSION : les fichiers sont repris. */
-const VERSION = "plans-0.68.31";
-const FICHIERS = ["./", "auteur.json", "autonome.js", "icone-192.png", "icone-512.png", "icone.png", "index.html", "js/base.js", "js/devis.js", "js/etude_clavier.js", "js/listes.js", "js/plan.js", "js/plan_photo.js", "manifest.webmanifest", "mot-auteur.md", "nouveautes.md", "riche.js", "sans-serveur.js", "style.css", "vendor/pdfjs/pdf.mjs", "vendor/pdfjs/pdf.worker.mjs", "version.json", "sw.js"];
+const VERSION = "plans-0.68.35";
+const FICHIERS = ["./", "auteur.json", "autonome.js", "icone-192.png", "icone-512.png", "icone.png", "index.html", "js/base.js", "js/devis.js", "js/etude_clavier.js", "js/listes.js", "js/plan.js", "js/plan_photo.js", "manifest.webmanifest", "mot-auteur.md", "nouveautes.md", "riche.js", "sans-serveur.js", "style.css", "vendor/pdfjs/pdf.mjs", "vendor/pdfjs/pdf.worker.mjs", "version.json", "videos.md", "sw.js"];
 self.addEventListener("install", e => {
   e.waitUntil(
     caches

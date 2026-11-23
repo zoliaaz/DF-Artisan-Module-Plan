@@ -1,4 +1,4 @@
-## Version 0.68.31 (depuis la 0.63.24)
+## Version 0.68.34 (depuis la 0.63.24)
 
 ### Murs
 - ✚ Murs arrondis : outil Mur, 2e appui, « ◠ Arrondi » (un angle, ou deux murs parallèles).
@@ -25,4 +25,4 @@
 - ✎ Aide (?) en onglets (tablette, clavier et souris, réglages), avec recherche.
 
 ### Version web
-- ✚ Bandeau « nouvelle version disponible » ; « 📋 Nouveautés » (cette fenêtre).
+- ✚ Bandeau « nouvelle version disponible » ; « 📋 Nouveautés » (cette fenêtre) ; « 🎬 Vidéos » d'explication.

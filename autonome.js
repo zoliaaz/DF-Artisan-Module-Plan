@@ -592,6 +592,60 @@ function mdEnHtml(texte) {
     if (document.visibilityState === "visible") verifier();
   });
 })();
+/* vidéos : videos.md à côté de la page — une vidéo par titre « ## », son explication dessous, et le lien de la vidéo
+ * (YouTube…, ou un fichier du dossier videos/) ; le bouton « 🎬 Vidéos » n'apparaît que s'il y en a */
+function lireVideos(texte) {
+  return String(texte || "")
+    .split(/^##\s+/m)
+    .slice(1)
+    .map(bloc => {
+      const [titre, ...reste] = bloc.split("\n");
+      let corps = reste.join("\n").trim(),
+        lien = "";
+      const m = corps.match(/\[[^\]]*\]\(([^)\s]+)\)|(https?:\/\/\S+)|(videos\/\S+)/);
+      if (m) {
+        lien = m[1] || m[2] || m[3];
+        corps = corps.replace(m[0], "").trim();
+      }
+      return { titre: titre.trim(), explication: corps, lien };
+    })
+    .filter(v => v.titre && v.lien);
+}
+(async () => {
+  const b = document.getElementById("videos");
+  if (!b) return;
+  let videos = [];
+  try {
+    const r = await fetch("videos.md", { cache: "no-cache" });
+    if (r.ok) videos = lireVideos(await r.text());
+  } catch {
+    /* (page ouverte sans serveur, ou pas de fichier) */
+  }
+  if (!videos.length) return;
+  b.style.display = "";
+  b.addEventListener("click", () => {
+    const liste = h(
+      "div",
+      { class: "liste-videos" },
+      ...videos.map(v => {
+        const expl = h("div");
+        expl.innerHTML = v.explication ? mdEnHtml(v.explication) : "";
+        return h(
+          "div",
+          { class: "video-ligne" },
+          h(
+            "div",
+            { class: "video-titre" },
+            h("h3", {}, v.titre),
+            h("button", { class: "btn principal petit", onclick: () => window.open(v.lien, "_blank", "noopener") }, "▶ Regarder la vidéo")
+          ),
+          expl
+        );
+      })
+    );
+    ouvrirModale("Vidéos", liste, [h("button", { class: "btn", onclick: fermerModale }, "Fermer")]);
+  });
+})();
 // mot de l'auteur et don : réglés dans auteur.json et mot-auteur.md (à côté de la page) ; absents ou vides : cachés
 (async () => {
   const lire = async (f, json) => {

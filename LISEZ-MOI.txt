@@ -62,5 +62,9 @@ Nouvelle version : quand la page en ligne a changé, un bandeau « Une nouvelle 
 apparaît en haut ; « Recharger la page » la prend, vos plans et vos options sont gardés. « 📋 Nouveautés » (bas de la
 colonne bleue) : correctifs, ajouts et modifications des dernières versions (fichier nouveautes.md).
 
+Vidéos : le bouton « 🎬 Vidéos » (colonne bleue) liste les vidéos d'explication écrites dans videos.md : une vidéo par
+titre « ## », son explication dessous, puis son lien (YouTube…, ou un fichier du dossier videos/, ex. videos/murs.mp4).
+Sans vidéo, le bouton n'apparaît pas.
+
 Installer comme une application (icône sur l'écran d'accueil, plein écran, hors connexion) : bouton « 📲 Installer
 l'application » de la colonne bleue (Android, Chrome, Edge ; sur iPhone : Partager > Sur l'écran d'accueil).
